@@ -368,6 +368,20 @@ try {
     const back = await pr.evaluate(() => { const g = window.__md, c = g.cur(), s = g.load(), l = g.dailyList("2026-11-16")[0], b = s.runs["a:2026-11-15"]; return { a: c.it.n === l.n && Object.keys(c.at).length === 2, b: !!b && Object.keys(b.cur.at).length === 1 && b.list[0].n === g.dailyList("2026-11-15")[0].n }; });
     check("あとから：A日を途中まで→B日を始める→A日に戻ると続きから（B日の途中も残る・カレンダーに「続き」）", back.a && back.b && mark.includes("続き"), JSON.stringify(back));
     await pr.close(); }
+  { // 別のタブで終えた「あとから」の回を、古いカレンダーから押しても空の回で上書きしない・今日の記録と重なったら知らせる（2026-11-04 CodeRabbit）
+    const done = (pg, d, also) => pg.evaluate(([K, d, also]) => { const g = window.__md, s = g.load(), list = g.dailyList(d); s.runs["a:" + d] = { mode: "a", date: d, list, res: list.map(() => ({ h: 0, r: 0 })), cur: null, id: "a" + d, a0: [] }; if (also) s.days[d] = { h: [0, 0, 0], r: [0, 0, 0] }; localStorage.setItem(K, JSON.stringify(s)); }, [KEY, d, also]);
+    const pd = await pageAt("2026-11-20", 390, base());
+    await pd.click("#go-cal"); await done(pd, "2026-11-16", false);
+    await pd.click('.cal button[data-k="2026-11-16"]');
+    const r1 = await pd.evaluate(() => { const s = window.__md.load(); return { rec: !!(s.adays || {})["2026-11-16"], run: s.runs["a:2026-11-16"] }; });
+    check("別のタブで終えたあとからの回は、古いカレンダーから押しても空の回で上書きせず、その日の記録にする", r1.rec && !r1.run, JSON.stringify(r1));
+    await pd.click("#back").catch(() => {}); await pd.goto(pd.url()); await pd.click("#go-cal"); await done(pd, "2026-11-15", true);
+    await pd.click('.cal button[data-k="2026-11-15"]'); // その日はもう取りこぼした日ではないので、カレンダーを描き直すだけ
+    const redrawn = (await pd.locator('.cal button.miss[data-k="2026-11-15"]').count()) === 0;
+    await pd.click("#back"); // ホームで、終えたまま残った回を片付ける
+    const r2 = await pd.evaluate(() => ({ redrawn: 0, run: window.__md.load().runs["a:2026-11-15"] || null, toast: (document.querySelector(".toast") || {}).textContent || "", mode: window.__md.mode(), home: !!document.querySelector("#go-cal") }));
+    check("あとからの日が別のタブで今日の3軒として記録済みなら、知らせてホームへ戻る（黙って戻らない・残った回は片付ける）", redrawn && r2.toast.includes("別の画面") && r2.home && !r2.run, JSON.stringify(r2));
+    await pd.close(); }
   { // load：保存に失敗したあと、片方にしか無い新しいキー（adays）も失わない（両方を先に fresh() で補う）
     const pn2 = await newPage();
     check("保存に失敗したあと、片方の記録にしか無い「あとから」の記録も統合で失わない", await pn2.evaluate((K) => { const g = window.__md, s0 = g.load(); const old = Object.assign({}, s0, { t: 9 }); delete old.adays; mem = JSON.stringify(Object.assign({}, s0, { t: 5, adays: { "2000-01-01": { h: [0], r: [0] } } })); localStorage.setItem(K, JSON.stringify(old)); const r = g.load(); mem = null; const r2 = (() => { mem = JSON.stringify(old); localStorage.setItem(K, JSON.stringify(Object.assign({}, s0, { t: 5, adays: { "2000-01-02": { h: [0], r: [0] } } }))); const x = g.load(); mem = null; return x; })(); return !!r.adays["2000-01-01"] && !!r2.adays["2000-01-02"]; }, KEY));

@@ -166,7 +166,7 @@ footer a{color:var(--ink2);min-height:44px;display:inline-flex;align-items:cente
   <ol>
     <li>下の部屋を押して選び、家のますを押すと、そこに置きます。</li>
     <li>置いた部屋を押すと選べて、別のますを押すと動きます（そこにある部屋と入れかわります）。もう一度押すと台に戻ります。</li>
-    <li>住む人の希望を全部かなえたら完成。答えは1つです。置いた部屋を一度も動かさずに完成すると「書き直しなし」。</li>
+    <li>住む人の希望を全部かなえたら完成。答えは1つです。置いた部屋を一度も動かさず、ヒントなしで完成すると「書き直しなし」。</li>
   </ol>
   <p>上が北です。「となり」は壁でくっついている部屋（ななめは入りません）。「北どなり」は真上の部屋です。</p>
   <p>今日の3軒はだれでも同じで1日1回。時間制限はありません。</p>
@@ -324,7 +324,7 @@ function startRun(mode, opt) {
     // あとから：取りこぼした日（過去7日・まだ遊んでいない）だけ。その日の今日の3軒と同じ家を出す
     if (mode === "a") {
       const ra = s.runs[runKey("a", opt)];
-      if (ra && ra.date === opt && !doneOf(ra)) return; // 続きから
+      if (ra && ra.date === opt) return; // 続きから（別のタブで終えた回なら play() が finish() で記録する。空の回で上書きしない）
       if (!lateDays(s, k).includes(opt)) { ng = true; return; }
       for (const m of Object.keys(s.runs)) if (m.startsWith("a:") && s.runs[m] === null && m.slice(2) < new Date(Date.parse(k) - 14 * 864e5).toISOString().slice(0, 10)) delete s.runs[m]; // 終えて空になった古い日の入れ物は片付ける
       s.runs[runKey("a", opt)] = { mode, date: opt, list: dailyList(opt), res: [], cur: null, id: "a" + opt, a0: achGot(s) };
@@ -459,6 +459,8 @@ function finish() {
     if (Array.isArray(run.a0)) newAch = achGot(s2).filter((id) => !run.a0.includes(id));
   });
   if (run.mode === "p") return result("p", run.date, false, { list: run.list, ...rec }, newAch);
+  // あとからの日を、別のタブがその日の今日の3軒として先に記録していたら、知らせてホームへ（黙って戻らない）
+  if (run.mode === "a" && !first && !(load().adays || {})[run.date]) { toast("この日は別の画面で遊び終えています"); return home(); }
   result(run.mode, run.date, first, null, newAch);
 }
 // 共有の文：間取り（答え）は出さない。ヒントの数だけ色を変える
