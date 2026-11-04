@@ -174,7 +174,7 @@ let mem = null; // 保存できない環境では、開いているあいだだ�
 const doneOf = (r) => !!r && r.res.length >= r.list.length, recOf = (r) => ({ h: r.res.map((x) => x.h) });
 // 終わった今日・上級の回を日ごとの記録に入れる（結果を見る前に別のタブが次の日を保存しても、終えた日を失わない）
 function bank(s, r) { const b = doneOf(r) ? (r.mode === "d" ? s.days : r.mode === "h" ? s.hdays : null) : null; if (!b || b[r.date]) return false; b[r.date] = recOf(r); return true; }
-function load() { let a = null, b = null; try { b = JSON.parse(localStorage.getItem(KEY)); } catch (e) {} try { a = mem !== null ? JSON.parse(mem) : null; } catch (e) {} if (a && a.v !== 1) a = null; if (b && b.v !== 1) b = null; if (!a || !b) return Object.assign(fresh(), a || b || {}); const [n, o] = (a.t || 0) >= (b.t || 0) ? [a, b] : [b, a]; const s = Object.assign(fresh(), n); for (const k in o) { if (k === "runs" || k === "t") continue; const x = o[k], y = n[k]; if (x && y && typeof x === "object" && typeof y === "object") { s[k] = Object.assign({}, x, y); for (const q in x) if (typeof x[q] === "number" && typeof y[q] === "number") s[k][q] = Math.max(x[q], y[q]); } else if (typeof x === "number" && typeof y === "number") s[k] = Math.max(x, y); else if (x === true) s[k] = true; } const ra = a.runs || {}, rb = b.runs || {}, prog = (r) => (r.res ? r.res.length : 0) * 1000 + (r.cur && r.cur.at ? Object.keys(r.cur.at).length : 0), idOf = (r) => JSON.stringify([r.list || null, r.id || null]); s.runs = Object.assign({}, n.runs); for (const m of new Set([...Object.keys(ra), ...Object.keys(rb)])) { const x = ra[m], y = rb[m]; if (x === undefined || y === undefined) { if (x || y) s.runs[m] = x || y; continue; } if (!x || !y) continue; if (x.date !== y.date) { const [w, l] = x.date > y.date ? [x, y] : [y, x]; bank(s, l); s.runs[m] = w; } else if (idOf(x) === idOf(y)) { const px = prog(x), py = prog(y); s.runs[m] = px > py ? x : py > px ? y : n.runs[m]; } } return s; }
+function load() { let a = null, b = null; try { b = JSON.parse(localStorage.getItem(KEY)); } catch (e) {} try { a = mem !== null ? JSON.parse(mem) : null; } catch (e) {} if (a && a.v !== 1) a = null; if (b && b.v !== 1) b = null; if (!a || !b) return Object.assign(fresh(), a || b || {}); const [n, o] = (a.t || 0) >= (b.t || 0) ? [a, b] : [b, a]; const s = Object.assign(fresh(), n); for (const k in o) { if (k === "runs" || k === "t") continue; const x = o[k], y = n[k]; if (x && y && typeof x === "object" && typeof y === "object") { s[k] = Object.assign({}, x, y); for (const q in x) if (typeof x[q] === "number" && typeof y[q] === "number") s[k][q] = Math.max(x[q], y[q]); } else if (typeof x === "number" && typeof y === "number") s[k] = Math.max(x, y); else if (x === true) s[k] = true; } const ra = a.runs || {}, rb = b.runs || {}, prog = (r) => (r.res ? r.res.length : 0) * 1000 + (r.cur && r.cur.at ? Object.keys(r.cur.at).length : 0), idOf = (r) => JSON.stringify([r.list || null, r.id || null]); s.runs = Object.assign({}, n.runs); for (const m of new Set([...Object.keys(ra), ...Object.keys(rb)])) { const x = ra[m], y = rb[m]; if (x === undefined || y === undefined) { if (x || y) s.runs[m] = x || y; continue; } if (!x || !y) { const r = x || y; if (!r || bank(s, r) || doneOf(r)) continue; const bd = r.mode === "d" ? s.days : r.mode === "h" ? s.hdays : null; if (bd && !bd[r.date]) s.runs[m] = r; continue; } if (x.date !== y.date) { const [w, l] = x.date > y.date ? [x, y] : [y, x]; bank(s, l); s.runs[m] = w; } else if (idOf(x) === idOf(y)) { const px = prog(x), py = prog(y); s.runs[m] = px > py ? x : py > px ? y : n.runs[m]; } } return s; }
 // 保存の前に読み直す（別のタブで進めた記録を消さない）
 function save(fn) { const s = load(); fn(s); s.t = Math.max(Date.now(), (s.t || 0) + 1); const j = JSON.stringify(s); try { localStorage.setItem(KEY, j); mem = null; } catch (e) { mem = j; } return s; }
 const prevDay = (k) => new Date(Date.parse(k) - 864e5).toISOString().slice(0, 10);
@@ -286,6 +286,7 @@ function valid(h, at, lock) {
   const S = h.S, used = new Set();
   for (const r in at) { const c = at[r]; if (!S.rooms.includes(r) || !Number.isInteger(c) || c < 0 || c >= S.w * S.h || used.has(c)) return false; used.add(c); }
   if (S.fixed) for (const r in S.fixed) if (at[r] !== S.fixed[r]) return false;
+  if (lock != null && !Array.isArray(lock)) return false; // 壊れた保存（配列でないロック）は使わない
   return (lock || []).every((r) => at[r] === h.sol[r]);
 }
 const same = (r) => r && cur && r.date === cur.date && r.id === cur.id && r.res.length === cur.i;
@@ -335,9 +336,11 @@ function check() {
   if (h.S.rooms.some((r) => cur.at[r] == null)) return;
   if (!h.q.every((q) => R.holds(q, cur.at, h.S) === true)) { if (cur.hard) toast("かなっていない希望があります"); return; }
   if (!same(load().runs[MODE])) { toast("別の画面で先に進んでいます"); return play(); }
+  let saved = false;
+  const s = save((s) => { const r = s.runs[MODE]; if (!same(r)) return; saved = true; r.res.push({ h: cur.hints }); r.cur = null; s.homes++; for (const x of h.S.rooms) s.rooms[x] = (s.rooms[x] || 0) + 1; });
+  if (!saved) { toast("別の画面で先に進んでいます"); return play(); } // 保存できなかった完成は出さない
   cur.done = true; buzz([10, 40, 10]);
   const st = starsOf(cur.hints);
-  const s = save((s) => { const r = s.runs[MODE]; if (!same(r)) return; r.res.push({ h: cur.hints }); r.cur = null; s.homes++; for (const x of h.S.rooms) s.rooms[x] = (s.rooms[x] || 0) + 1; });
   paint();
   const r = s.runs[MODE], fin = r && r.res.length >= r.list.length;
   $("after").innerHTML = `<div class="verdict" role="status">
