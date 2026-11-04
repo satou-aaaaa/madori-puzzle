@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; worker-src 'self'; manifest-src 'self'">
+<title>間取りパズル</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="住む人の希望を全部かなえるように、部屋を並べる1日3軒のパズル。答えは1つ、時間制限なし。">
+<meta name="theme-color" content="#eef0ea">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="間取りパズル">
+<meta property="og:title" content="間取りパズル：住む人の希望を全部かなえられる？">
+<meta property="og:description" content="住む人の希望どおりに部屋を並べる。だれでも同じ1日3軒、答えは1つ。">
+<meta property="og:url" content="https://satou-aaaaa.github.io/madori-puzzle/">
+<meta property="og:image" content="https://satou-aaaaa.github.io/madori-puzzle/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="間取りパズル：希望どおりに部屋を並べるパズル">
+<meta property="og:locale" content="ja_JP">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&display=swap">
+<style>
+/* 設計図：方眼の紙に、色をぬった部屋。希望の札は付せん */
+:root{
+  --bg:#eef0ea; --paper:#fffffb; --ink:#28313a; --ink2:#66707a; --line:#28313a22;
+  --grid:#2f5d7a; --wall:#3b4650; --ok:#2f8a5b; --ng:#c8402b; --sel:#d2492f; --gold:#d79b2c; --red2:#9b3220;
+  --f-body:"M PLUS Rounded 1c","Hiragino Maru Gothic ProN","Yu Gothic",sans-serif;
+  color-scheme:light;
+}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-weight:500;overflow-x:hidden;-webkit-tap-highlight-color:transparent}
+.wrap{max-width:460px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px 28px;display:flex;flex-direction:column;gap:12px;min-height:100%;box-sizing:border-box}
+header{display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:44px}
+h1{font-weight:800;font-size:21px;margin:0;letter-spacing:.04em}
+h1 small{font-size:12px;letter-spacing:0;color:var(--ink2);margin-left:8px;font-weight:500}
+.icon{all:unset;cursor:pointer;font-size:18px;min-width:44px;height:44px;display:grid;place-items:center;border-radius:12px;border:1px solid var(--line);box-sizing:border-box;padding:0 8px;background:var(--paper)}
+.icon:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(--sel);outline-offset:2px}
+.dots{display:flex;gap:6px;flex:1;max-width:120px}
+.dots i{flex:1;height:6px;border-radius:3px;background:var(--line)}
+.dots i.on{background:var(--sel)}.dots i.done{background:var(--ink)}
+button.main,a.main{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;min-height:52px;border-radius:16px;background:var(--grid);color:#fff;font-weight:800;font-size:17px;padding:0 16px;text-align:center;box-shadow:0 4px 0 #1d3d52}
+button.main:active{transform:translateY(2px);box-shadow:0 2px 0 #1d3d52}
+button.main.alt{background:#7a4e2f;box-shadow:0 4px 0 #533320}
+button.sub,a.sub{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;min-height:46px;border-radius:14px;border:1px solid var(--line);background:var(--paper);color:var(--ink);font-weight:800;font-size:15px;padding:0 12px;text-align:center}
+button.sub:disabled{opacity:.4;cursor:default}
+.row{display:flex;gap:10px}.row>.sub,.row>.main{flex:1 1 0}
+.note{color:var(--ink2);font-size:13px;line-height:1.6;margin:0;text-align:center}
+.note a{color:var(--red2)}
+/* 家 */
+.plan{position:relative;background:linear-gradient(#2f5d7a14 1px,transparent 1px) 0 0/12px 12px,linear-gradient(90deg,#2f5d7a14 1px,transparent 1px) 0 0/12px 12px,var(--paper);border-radius:14px;padding:22px 14px 14px;border:1px solid var(--line)}
+.plan .nsew{position:absolute;font-size:11px;color:var(--grid);font-weight:800}
+.house{display:grid;gap:0;border:4px solid var(--wall);border-radius:4px;background:var(--wall);touch-action:manipulation}
+.cell{all:unset;cursor:pointer;aspect-ratio:1.3;background:#fffffbcc;border:2px solid var(--wall);margin:-1px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:13px;font-weight:800;position:relative;box-sizing:border-box;text-align:center;line-height:1.15}
+.cell b{font-size:clamp(22px,7vw,30px);font-weight:500}
+.cell.on{background:var(--c)}
+.cell.sel{outline:3px solid var(--sel);outline-offset:-5px}
+.cell.lock::after{content:"🔒";position:absolute;right:3px;top:2px;font-size:11px}
+.cell.fix::after{content:"";position:absolute;bottom:-4px;left:30%;right:30%;height:5px;background:var(--paper)}
+.cell.empty{color:var(--ink2);font-weight:500}
+.house.win{animation:win .6s}
+@keyframes win{30%{transform:scale(1.03)}60%{transform:scale(1.01)}}
+/* 部屋の台 */
+.tray{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;min-height:48px}
+.rm{all:unset;cursor:pointer;box-sizing:border-box;min-height:44px;padding:4px 10px;border-radius:12px;background:var(--c);border:2px solid transparent;font-weight:800;font-size:14px;display:flex;align-items:center;gap:4px;box-shadow:0 3px 0 #28313a22}
+.rm.sel{border-color:var(--sel);transform:translateY(-3px)}
+/* 希望 */
+.wish{display:flex;flex-direction:column;gap:4px;margin:0;padding:0;list-style:none}
+.wish li{display:flex;align-items:center;gap:6px;background:#fff8c9;border-radius:8px;padding:4px 10px;font-size:14px;box-shadow:0 2px 0 #28313a14;line-height:1.35}
+.wish li i{font-style:normal;width:20px;text-align:center;font-weight:800;flex:none}
+.wish li.ok i{color:var(--ok)}.wish li.ng{background:#ffe1d9}.wish li.ng i{color:var(--ng)}
+.who{display:flex;align-items:center;gap:10px;font-size:14px}
+.who b{font-size:26px}
+.status{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px;color:var(--ink2);min-height:22px}
+.verdict{background:var(--paper);border:2px solid var(--grid);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px;box-shadow:0 6px 0 #28313a1c;animation:up .35s ease-out}
+@keyframes up{from{transform:translateY(16px);opacity:0}to{transform:none;opacity:1}}
+.verdict .hd{display:flex;justify-content:center;align-items:baseline;gap:10px;font-size:22px;font-weight:800}
+.stars{color:var(--gold);letter-spacing:.1em;font-size:20px}
+.stars .off{color:#28313a26}
+.title{font-weight:800;font-size:38px;letter-spacing:.08em;text-align:center;margin:4px 0 0}
+.lead{text-align:center;color:var(--ink2);margin:0;font-size:14px;line-height:1.7}
+.hero{width:min(70%,240px);margin:0 auto}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stats div{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:10px 6px;text-align:center}
+.stats b{display:block;font-size:20px}
+.stats small{color:var(--ink2);font-size:12px}
+.rank{text-align:center;font-size:13px;color:var(--red2)}
+.share{background:var(--paper);border-radius:14px;padding:12px;white-space:pre-line;font-size:15px;line-height:1.6;text-align:center;border:1px solid var(--line)}
+.shares{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.shares a,.shares button{display:flex;align-items:center;justify-content:center;min-height:44px;border-radius:12px;border:1px solid var(--line);background:var(--paper);color:var(--ink);font-size:14px;font-weight:800;text-decoration:none;padding:0 6px;box-sizing:border-box;font-family:inherit;cursor:pointer}
+.big{font-weight:800;font-size:24px;text-align:center;margin:0}
+.minis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;align-items:start}
+.minis .plan{padding:6px;border-radius:8px}
+.minis .cell{font-size:0;aspect-ratio:1.15;border-width:1px}
+.minis .cell b{font-size:16px}
+.minis .house{border-width:2px}
+.minis p{margin:4px 0 0;text-align:center;font-size:12px;color:var(--ink2)}
+.dex{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.dex div{display:flex;flex-direction:column;align-items:center;gap:2px;background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:8px;min-height:44px;font-size:13px}
+.dex b{font-size:26px;font-weight:500}
+.dex span{font-size:12px;color:var(--ink2)}
+.lv{display:flex;gap:8px;flex-wrap:wrap}
+.lv button{flex:1 1 40%}
+dialog{border:none;border-radius:18px;background:var(--paper);color:var(--ink);max-width:400px;width:calc(100% - 32px);padding:20px;box-sizing:border-box}
+dialog::backdrop{background:#000000aa}
+dialog h2{margin:0 0 10px;letter-spacing:.06em}
+dialog ol{padding-left:1.3em;margin:0 0 12px;line-height:1.8}
+dialog p{margin:0 0 10px;font-size:14px;line-height:1.7;color:var(--ink2)}
+dialog a{color:var(--red2)}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:12px;font-weight:800;z-index:9;box-shadow:0 6px 20px #0005;max-width:90%;text-align:center}
+footer{margin-top:auto;text-align:center;font-size:12px;color:var(--ink2);display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+footer a{color:var(--ink2);min-height:44px;display:inline-flex;align-items:center}
+[hidden]{display:none!important}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<dialog id="howto" aria-labelledby="howto-t">
+  <h2 id="howto-t">遊び方</h2>
+  <ol>
+    <li>下の部屋を押して選び、家のますを押すと、そこに置きます。</li>
+    <li>置いた部屋を押すと選べて、別のますを押すと動きます（そこにある部屋と入れかわります）。もう一度押すと台に戻ります。</li>
+    <li>住む人の希望を全部かなえたら完成。答えは1つです。</li>
+  </ol>
+  <p>上が北です。「となり」は壁でくっついている部屋（ななめは入りません）。「北どなり」は真上の部屋です。</p>
+  <p>今日の3軒はだれでも同じで1日1回。時間制限はありません。</p>
+  <p><a id="fb2" target="_blank" rel="noopener">感想を送る</a></p>
+  <button class="main" id="howto-ok" style="width:100%">わかった</button>
+</dialog>
+<script src="rules.js"></script>
+<script src="data.js"></script>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id), app = $("app");
+const SITE = "https://satou-aaaaa.github.io/madori-puzzle/";
+const FEEDBACK = "https://github.com/satou-aaaaa/madori-puzzle/issues/new?template=feedback.yml";
+const KEY = "madori-v1", EPOCH = "2026-11-04";
+const R = window.MADORI, D = window.MADORI_DATA;
+
+// ---- 日付（日本時間。だれでも同じ3軒。1周するまで同じ家は出ない）----
+const jstNow = () => new Date(Date.now() + 9 * 3600e3);
+const todayKey = () => jstNow().toISOString().slice(0, 10);
+const dayNo = (k) => Math.round((Date.parse(k) - Date.parse(EPOCH)) / 864e5) + 1;
+const PER = D.P[0].length, mod = (n) => ((n % PER) + PER) % PER;
+// 今日の3軒：平屋・二世帯・注文住宅。上級：条件の多い2軒（希望の ✓✗ が出ない・ヒントなし）
+const dailyList = (k) => R.SIZES.map((S, i) => ({ s: i, n: mod((dayNo(k) - 1) * 97 + i * 131) }));
+const HPER = D.H.length; // 上級は1日2軒なので、2倍の数を用意している
+const hardList = (k) => [0, 1].map((i) => ({ s: 3, n: ((((dayNo(k) - 1) * 2 + i) * 3) % HPER + HPER) % HPER }));
+const sizeOf = (s) => (s === 3 ? R.HARD : R.SIZES[s]);
+const TYPE = { S: "side", C: "corner", A: "adj", N: "nadj", D: "dir" };
+const WHO = ["👨‍👩‍👧", "👵", "👨‍👩‍👦‍👦", "🧑‍🍳", "👩‍💻", "👴", "👫", "👩‍👧"];
+const cache = new Map();
+function houseOf(it) {
+  const k = it.s + ":" + it.n; if (cache.has(k)) return cache.get(k);
+  const S = sizeOf(it.s), raw = (it.s === 3 ? D.H : D.P[it.s])[it.n], [qs, sol] = raw.split("|");
+  const q = qs.split(",").map((t) => { const m = t.match(/^([SCAND])(\d)(\d?)([nsew]?)$/); return { t: TYPE[m[1]], a: S.rooms[+m[2]], b: m[3] !== "" ? S.rooms[+m[3]] : null, d: m[4] || null }; });
+  const h = { S, q, sol: Object.fromEntries(S.rooms.map((r, i) => [r, +sol[i]])), who: WHO[(it.n * 7 + it.s) % WHO.length], size: S.name };
+  cache.set(k, h); return h;
+}
+const starsOf = (h) => (h === 0 ? 3 : h === 1 ? 2 : 1);
+const starStr = (s) => `<span class="stars" aria-label="星${s}つ">${"★".repeat(s)}<span class="off">${"★".repeat(3 - s)}</span></span>`;
+
+// ---- 記録（この端末の localStorage だけ）----
+// 進行中の遊びはモードごとに分けて持つ（練習を始めても今日・上級の途中経過を消さない）。rooms：部屋 → 置いた回数
+const fresh = () => ({ v: 1, days: {}, hdays: {}, rooms: {}, homes: 0, runs: {}, tut: false, kofi: {} });
+let MODE = "d";
+let mem = null; // 保存できない環境では、開いているあいだだけここに置く
+// 保存に失敗したあとはメモリと保存の両方を読む。記録は合わせて数は高いほう、途中経過は同じ日・同じ家なら進んだほう
+function load() { let a = null, b = null; try { b = JSON.parse(localStorage.getItem(KEY)); } catch (e) {} try { a = mem !== null ? JSON.parse(mem) : null; } catch (e) {} if (a && a.v !== 1) a = null; if (b && b.v !== 1) b = null; if (!a || !b) return Object.assign(fresh(), a || b || {}); const [n, o] = (a.t || 0) >= (b.t || 0) ? [a, b] : [b, a]; const s = Object.assign(fresh(), n); for (const k in o) { if (k === "runs" || k === "t") continue; const x = o[k], y = n[k]; if (x && y && typeof x === "object" && typeof y === "object") { s[k] = Object.assign({}, x, y); for (const q in x) if (typeof x[q] === "number" && typeof y[q] === "number") s[k][q] = Math.max(x[q], y[q]); } else if (typeof x === "number" && typeof y === "number") s[k] = Math.max(x, y); else if (x === true) s[k] = true; } const ra = a.runs || {}, rb = b.runs || {}, prog = (r) => (r.res ? r.res.length : 0) * 1000 + (r.cur && r.cur.at ? Object.keys(r.cur.at).length : 0), idOf = (r) => JSON.stringify([r.list || null, r.id || null]); s.runs = Object.assign({}, n.runs); for (const m of new Set([...Object.keys(ra), ...Object.keys(rb)])) { const x = ra[m], y = rb[m]; if (!x || !y) continue; if (x.date !== y.date) s.runs[m] = x.date > y.date ? x : y; else if (idOf(x) === idOf(y)) s.runs[m] = prog(x) > prog(y) ? x : y; } return s; }
+// 保存の前に読み直す（別のタブで進めた記録を消さない）
+function save(fn) { const s = load(); fn(s); s.t = Math.max(Date.now(), (s.t || 0) + 1); const j = JSON.stringify(s); try { localStorage.setItem(KEY, j); mem = null; } catch (e) { mem = j; } return s; }
+const prevDay = (k) => new Date(Date.parse(k) - 864e5).toISOString().slice(0, 10);
+function streak(days) { let k = todayKey(), n = 0; if (!days[k]) k = prevDay(k); while (days[k]) { n++; k = prevDay(k); } return n; }
+const RANKS = [[0, "見習い"], [10, "設計の助手"], [40, "間取りの設計士"], [120, "人気の設計士"], [300, "間取りの名人"]];
+const rankOf = (n) => RANKS.filter((r) => n >= r[0]).pop()[1];
+const nextRank = (n) => RANKS.find((r) => r[0] > n);
+
+// ---- 画面 ----
+const md = (k) => `${+k.slice(5, 7)}/${+k.slice(8, 10)}`;
+function toast(t) { const d = document.createElement("div"); d.className = "toast"; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 1800); }
+const buzz = (n = 12) => { try { navigator.vibrate && navigator.vibrate(n); } catch (e) {} };
+const esc = (t) => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+const footer = () => `<footer><a href="#" id="f-how">遊び方</a><a href="${FEEDBACK}" target="_blank" rel="noopener">感想を送る</a><a href="https://ko-fi.com/satouaaaaa" target="_blank" rel="noopener">Ko-fi で応援</a></footer>`;
+function bindFooter() { const h = $("f-how"); if (h) h.onclick = (e) => { e.preventDefault(); openHow(); }; }
+function openHow() { $("fb2").href = FEEDBACK; const d = $("howto"); if (d.showModal) d.showModal(); else d.setAttribute("open", ""); }
+$("howto-ok").onclick = () => { const d = $("howto"); d.close ? d.close() : d.removeAttribute("open"); save((s) => { s.tut = true; }); };
+
+// 家を描く。at：部屋 → ます
+function planHtml(h, at, opt = {}) {
+  const S = h.S, own = {}; for (const r in at) own[at[r]] = r;
+  const cells = [];
+  for (let c = 0; c < S.w * S.h; c++) {
+    const r = own[c], info = r ? R.ROOMS[r] : null, fixed = r && S.fixed && S.fixed[r] === c;
+    const tag = opt.mini ? "span" : "button";
+    cells.push(`<${tag} class="cell${r ? " on" : " empty"}${opt.sel === r && r ? " sel" : ""}${r && opt.lock && opt.lock.includes(r) ? " lock" : ""}${fixed ? " fix" : ""}" data-c="${c}" ${r ? `style="--c:${info[2]}"` : ""} aria-label="${r ? info[0] : "空き"}">${r ? `<b>${info[1]}</b>${info[0]}` : opt.mini ? "" : "空き"}</${tag}>`);
+  }
+  return `<div class="plan">${opt.mini ? "" : `<span class="nsew" style="top:4px;left:50%;transform:translateX(-50%)">北</span><span class="nsew" style="bottom:-1px;left:50%;transform:translateX(-50%)">南</span><span class="nsew" style="left:3px;top:50%">西</span><span class="nsew" style="right:3px;top:50%">東</span>`}<div class="house${opt.win ? " win" : ""}" style="grid-template-columns:repeat(${S.w},1fr)">${cells.join("")}</div></div>`;
+}
+
+function home() {
+  const s = load(), k = todayKey(), done = s.days[k], hdone = s.hdays[k];
+  for (const m of ["d", "h"]) { const r = s.runs[m]; if (r && r.res.length >= r.list.length) { MODE = m; return finish(); } }
+  const nr = nextRank(s.homes);
+  const rd = s.runs.d && s.runs.d.date === k ? s.runs.d : null, rh = s.runs.h && s.runs.h.date === k ? s.runs.h : null;
+  const sample = houseOf({ s: 1, n: 0 });
+  app.innerHTML = `
+    <h1 class="title">間取りパズル</h1>
+    <div class="hero" aria-hidden="true">${planHtml(sample, sample.sol, { mini: true })}</div>
+    <p class="lead">住む人の希望を、全部かなえる間取りに。<br>答えは1つ。だれでも同じ1日3軒。</p>
+    ${done ? `<div class="share">今日の結果　${done.h.map(sq).join("")}</div>` : ""}
+    <button class="main" id="go-d">${done ? "今日の結果を見る" : rd ? `続きから（${rd.res.length + 1}軒目）` : `今日の3軒を設計する <small>#${dayNo(k)}</small>`}</button>
+    ${done ? `<button class="main alt" id="go-h">${hdone ? "上級の結果を見る" : rh ? "上級の続きから" : "上級：希望の多い2軒（✓が出ない・ヒントなし）"}</button>` : ""}
+    <div class="row"><button class="sub" id="go-p">練習（何度でも）</button><button class="sub" id="go-dex">建てた家 ${s.homes}軒</button></div>
+    <div class="stats"><div><b>${streak(s.days)}</b><small>連続の日</small></div><div><b>${Object.keys(s.days).length}</b><small>遊んだ日</small></div><div><b>${s.homes}</b><small>建てた家</small></div></div>
+    <p class="rank">称号：${rankOf(s.homes)}${nr ? `（あと${nr[0] - s.homes}軒で${nr[1]}）` : ""}</p>
+    ${footer()}`;
+  $("go-d").onclick = () => (done ? result("d", k) : startRun("d"));
+  if ($("go-h")) $("go-h").onclick = () => (hdone ? result("h", k) : startRun("h"));
+  $("go-p").onclick = practiceMenu;
+  $("go-dex").onclick = dex;
+  bindFooter();
+  if (!s.tut) openHow();
+}
+function practiceMenu() {
+  app.innerHTML = `<header><button class="icon" id="back" aria-label="もどる">←</button><h1>練習<small>今日の記録には入りません（建てた家には入ります）</small></h1><span></span></header>
+    <p class="note">家の種類を選ぶと、新しい家が出ます。</p>
+    <div class="lv">${[...R.SIZES, R.HARD].map((S, i) => `<button class="sub" data-s="${i}" style="min-height:64px">${S.name}<br><small>${S.w}×${S.h}・${S.rooms.length}部屋</small></button>`).join("")}</div>${footer()}`;
+  $("back").onclick = home;
+  document.querySelectorAll(".lv button").forEach((b) => (b.onclick = () => startRun("p", +b.dataset.s)));
+  bindFooter();
+}
+function startRun(mode, opt) {
+  const k = todayKey();
+  save((s) => {
+    if (mode !== "p" && s.runs[mode] && s.runs[mode].date === k) return; // 続きから
+    const list = mode === "d" ? dailyList(k) : mode === "h" ? hardList(k) : [{ s: opt, n: Math.floor(Math.random() * PER) }];
+    s.runs[mode] = { mode, date: k, list, res: [], cur: null, id: Date.now().toString(36) };
+  });
+  MODE = mode;
+  play();
+}
+
+// 今の家：{ i, date, id, it, h, at:{部屋:ます}, lock:[ヒントで置いた部屋], hints, sel, done, hard }
+let cur = null;
+function play() {
+  const s = load(), run = s.runs[MODE];
+  if (!run) return home();
+  const i = run.res.length;
+  if (i >= run.list.length) return finish();
+  const it = run.list[i], h = houseOf(it), hard = it.s === 3;
+  const saved = run.cur && run.cur.i === i ? run.cur : null;
+  const base = Object.assign({}, h.S.fixed || {});
+  const ok = saved && valid(h, saved.at, saved.lock);
+  cur = { i, date: run.date, id: run.id, it, h, at: ok ? Object.assign({}, saved.at) : base, lock: ok ? (saved.lock || []).slice() : [], hints: ok ? saved.hints || 0 : 0, sel: null, done: false, hard };
+  cur.sel = h.S.rooms.find((r) => cur.at[r] == null) || null;
+  const label = run.mode === "h" ? "上級" : run.mode === "p" ? `練習・${h.size}` : h.size;
+  app.innerHTML = `
+    <header><button class="icon" id="back" aria-label="もどる">←</button>
+      <div class="dots" aria-label="${i + 1}軒目／${run.list.length}軒">${run.list.map((_, j) => `<i class="${j < i ? "done" : j === i ? "on" : ""}"></i>`).join("")}</div>
+      <span style="font-size:13px;color:var(--ink2)">${label} ${i + 1}/${run.list.length}</span></header>
+    <div class="who"><b aria-hidden="true">${h.who}</b><span>住む人の希望（${h.q.length}つ）${hard ? "<br><small style='color:var(--ink2)'>上級：かなったかどうかは完成まで出ません</small>" : ""}</span></div>
+    <ul class="wish" id="wish"></ul>
+    <div id="pl"></div>
+    <div class="tray" id="tray"></div>
+    <div class="status"><span id="left"></span>${hard ? "<span>ヒントなし</span>" : `<button class="sub" id="hint" style="min-height:44px;padding:0 14px">ヒント</button>`}</div>
+    <div class="row"><button class="sub" id="clear">全部もどす</button></div>
+    <div id="after"></div>`;
+  $("back").onclick = home;
+  $("clear").onclick = clearAll;
+  if ($("hint")) $("hint").onclick = hint;
+  paint();
+  window.scrollTo(0, 0);
+}
+// 保存してあった置き方が、この家で正しい形か（部屋とますが合っていて重ならない・決まった部屋は動かない）
+function valid(h, at, lock) {
+  if (!at || typeof at !== "object") return false;
+  const S = h.S, used = new Set();
+  for (const r in at) { const c = at[r]; if (!S.rooms.includes(r) || !Number.isInteger(c) || c < 0 || c >= S.w * S.h || used.has(c)) return false; used.add(c); }
+  if (S.fixed) for (const r in S.fixed) if (at[r] !== S.fixed[r]) return false;
+  return (lock || []).every((r) => at[r] === h.sol[r]);
+}
+const same = (r) => r && cur && r.date === cur.date && r.id === cur.id && r.res.length === cur.i;
+function keep() { save((s) => { const r = s.runs[MODE]; if (same(r)) r.cur = { i: cur.i, at: cur.at, lock: cur.lock, hints: cur.hints }; }); }
+const movable = (r) => !(cur.h.S.fixed && cur.h.S.fixed[r] != null) && !cur.lock.includes(r);
+function paint() {
+  const h = cur.h, S = h.S;
+  $("wish").innerHTML = h.q.map((q) => { const v = R.holds(q, cur.at, S), show = !cur.hard || cur.done; return `<li class="${show && v === true ? "ok" : show && v === false ? "ng" : ""}"><i>${show ? (v === true ? "✓" : v === false ? "✗" : "・") : "・"}</i>${esc(R.text(q))}</li>`; }).join("");
+  $("pl").innerHTML = planHtml(h, cur.at, { sel: cur.sel, lock: cur.lock, win: cur.done });
+  document.querySelectorAll("#pl .cell[data-c]").forEach((b) => (b.onclick = () => tapCell(+b.dataset.c)));
+  const left = S.rooms.filter((r) => cur.at[r] == null);
+  $("tray").innerHTML = left.map((r) => `<button class="rm${cur.sel === r ? " sel" : ""}" data-r="${r}" style="--c:${R.ROOMS[r][2]}" aria-pressed="${cur.sel === r}">${R.ROOMS[r][1]} ${R.ROOMS[r][0]}</button>`).join("") || (cur.done ? "" : `<span class="note">全部置きました。希望に ✗ があれば、部屋を押して動かします。</span>`);
+  document.querySelectorAll(".rm").forEach((b) => (b.onclick = () => { if (cur.done) return; cur.sel = b.dataset.r; paint(); }));
+  $("left").textContent = cur.done ? "" : `のこり ${left.length}部屋${cur.hints ? `・ヒント ${cur.hints}` : ""}`;
+  $("clear").disabled = cur.done || S.rooms.every((r) => cur.at[r] == null || !movable(r));
+  if ($("hint")) $("hint").disabled = cur.done || cur.hints >= 2;
+}
+function tapCell(c) {
+  if (cur.done) return;
+  const S = cur.h.S, here = S.rooms.find((r) => cur.at[r] === c), picked = cur.sel != null && cur.at[cur.sel] != null;
+  const locked = (r) => toast(cur.lock.includes(r) ? "ヒントで置いた部屋は動かせません" : "玄関は動かせません");
+  if (here && !(picked && cur.sel !== here)) { // 置いた部屋を押した：選ぶ（もう一度押すと台に戻す）
+    if (!movable(here)) return locked(here);
+    if (cur.sel === here) { delete cur.at[here]; keep(); paint(); return; }
+    cur.sel = here; paint(); return;
+  }
+  if (cur.sel == null) { toast("先に下の部屋を押して選んでください"); return; }
+  if (here && !movable(here)) { locked(here); buzz(30); return; }
+  const from = cur.at[cur.sel];
+  if (here) cur.at[here] = from; // 選んだ部屋と入れかえる
+  cur.at[cur.sel] = c;
+  cur.sel = S.rooms.find((r) => cur.at[r] == null) || null; // 次の部屋を自動で選ぶ
+  buzz(); keep(); paint(); check();
+}
+function clearAll() { if (cur.done) return; for (const r of cur.h.S.rooms) if (movable(r)) delete cur.at[r]; cur.sel = cur.h.S.rooms.find((r) => cur.at[r] == null) || null; keep(); paint(); }
+// ヒント：まだ答えのますにない部屋を1つ、答えのますに置いて動かせなくする（そこにあった部屋は台に戻す）
+function hint() {
+  if (cur.done || cur.hints >= 2) return;
+  const h = cur.h, r = h.S.rooms.find((x) => movable(x) && cur.at[x] !== h.sol[x]);
+  if (!r) return;
+  const c = h.sol[r], other = h.S.rooms.find((x) => cur.at[x] === c); if (other) delete cur.at[other];
+  cur.at[r] = c; cur.lock.push(r); cur.hints++; cur.sel = h.S.rooms.find((x) => cur.at[x] == null) || null;
+  keep(); paint(); toast(`${R.ROOMS[r][0]}の場所を教えました`); check();
+}
+function check() {
+  const h = cur.h;
+  if (h.S.rooms.some((r) => cur.at[r] == null)) return;
+  if (!h.q.every((q) => R.holds(q, cur.at, h.S) === true)) { if (cur.hard) toast("かなっていない希望があります"); return; }
+  if (!same(load().runs[MODE])) { toast("別の画面で先に進んでいます"); return play(); }
+  cur.done = true; buzz([10, 40, 10]);
+  const st = starsOf(cur.hints);
+  const s = save((s) => { const r = s.runs[MODE]; if (!same(r)) return; r.res.push({ h: cur.hints }); r.cur = null; s.homes++; for (const x of h.S.rooms) s.rooms[x] = (s.rooms[x] || 0) + 1; });
+  paint();
+  const r = s.runs[MODE], fin = r && r.res.length >= r.list.length;
+  $("after").innerHTML = `<div class="verdict" role="status">
+    <div class="hd">完成！ ${starStr(st)}</div>
+    <p class="note">希望を${h.q.length}つ、全部かなえました。</p>
+    <button class="main" id="next">${fin ? "結果を見る" : "次の家へ"}</button></div>`;
+  $("next").onclick = play;
+  setTimeout(() => { if ($("next") && cur.done) $("next").scrollIntoView({ behavior: "smooth", block: "nearest" }); }, 60);
+}
+
+function finish() {
+  const s = load(), run = s.runs[MODE];
+  if (!run) return home();
+  let first = false;
+  const rec = { h: run.res.map((r) => r.h) };
+  save((s2) => {
+    if (run.mode === "d" && !s2.days[run.date]) { s2.days[run.date] = rec; first = true; }
+    if (run.mode === "h" && !s2.hdays[run.date]) { s2.hdays[run.date] = rec; first = true; }
+    s2.runs[MODE] = null;
+  });
+  if (run.mode === "p") return result("p", run.date, false, { list: run.list, ...rec });
+  result(run.mode, run.date, first);
+}
+// 共有の文：間取り（答え）は出さない。ヒントの数だけ色を変える
+const sq = (h) => (h === 0 ? "🏠" : h === 1 ? "🟨" : "🟧");
+function shareText(mode, k, rec) {
+  return `間取りパズル${mode === "h" ? " 上級" : ""} #${dayNo(k)} ${md(k)}\n${rec.h.map(sq).join("")}${rec.h.every((h) => h === 0) ? " ヒントなしで完成" : ""}`;
+}
+function untilNext() { const n = jstNow(), ms = 864e5 - (n.getTime() % 864e5); return `${Math.floor(ms / 36e5)}時間${Math.floor((ms % 36e5) / 6e4)}分`; }
+function result(mode, k, first, prec) {
+  const s = load();
+  const list = mode === "p" ? prec.list : mode === "d" ? dailyList(k) : hardList(k);
+  const rec = mode === "p" ? prec : (mode === "d" ? s.days : s.hdays)[k];
+  if (!rec) return home();
+  const total = rec.h.reduce((a, b) => a + b, 0), text = shareText(mode, k, rec);
+  const showKofi = first && mode !== "p" && total === 0 && !s.kofi[k + mode];
+  if (showKofi) save((s2) => { s2.kofi[k + mode] = 1; });
+  app.innerHTML = `
+    <header><button class="icon" id="back" aria-label="ホームへ">←</button><h1>間取りパズル<small>${mode === "d" ? `今日の3軒 #${dayNo(k)}` : mode === "h" ? "上級" : "練習"}</small></h1><span></span></header>
+    <p class="big">${total === 0 ? "ヒントなしで完成！" : `${list.length}軒 完成（ヒント ${total}）`}</p>
+    <div class="minis">${list.map((it, j) => { const h = houseOf(it); return `<div>${planHtml(h, h.sol, { mini: true })}<p>${h.size} ${starStr(starsOf(rec.h[j]))}</p></div>`; }).join("")}</div>
+    ${mode !== "p" ? `<div class="share">${esc(text)}</div>
+    <button class="main" id="share">結果をシェア</button>
+    <div class="shares"><a id="toX" target="_blank" rel="noopener">Xで投稿</a><a id="toLine" target="_blank" rel="noopener">LINEで送る</a><button id="copy">コピー</button></div>
+    <p class="note">🏠ヒントなし　🟨ヒント1回　🟧ヒント2回<br>次の3軒まで あと <b>${untilNext()}</b></p>` : ""}
+    ${mode === "d" && k === todayKey() && !s.hdays[k] ? `<button class="main alt" id="go-h">上級：希望の多い2軒に挑む</button>` : ""}
+    <div class="row"><button class="sub" id="go-p">練習する</button><button class="sub" id="go-dex">建てた家を見る</button></div>
+    ${showKofi ? `<p class="note kofi">楽しめたら、<a href="https://ko-fi.com/satouaaaaa" target="_blank" rel="noopener">Ko-fi でコーヒー1杯の応援</a>をもらえると、新しいゲームづくりの励みになります（任意・遊ぶのはずっと無料）。</p>` : ""}
+    <p class="note"><a href="${FEEDBACK}" target="_blank" rel="noopener">感想を送る</a></p>`;
+  $("back").onclick = home;
+  $("go-p").onclick = practiceMenu;
+  $("go-dex").onclick = dex;
+  if ($("go-h")) $("go-h").onclick = () => (k === todayKey() ? startRun("h") : home()); // 画面を開いたまま0時を過ぎたら、翌日の上級は始めない
+  if (mode !== "p") {
+    const withUrl = text + "\n" + SITE;
+    $("toX").href = "https://twitter.com/intent/tweet?text=" + encodeURIComponent(withUrl);
+    $("toLine").href = "https://line.me/R/share?text=" + encodeURIComponent(withUrl);
+    const copy = (t) => { (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast("コピーしました"), () => toast("コピーできませんでした")); };
+    $("copy").onclick = () => copy(withUrl);
+    $("share").onclick = () => { if (navigator.share) navigator.share({ text: withUrl }).catch(() => {}); else copy(withUrl); };
+  }
+}
+
+function dex() {
+  const s = load();
+  app.innerHTML = `
+    <header><button class="icon" id="back" aria-label="ホームへ">←</button><h1>建てた家<small>${s.homes}軒</small></h1><span></span></header>
+    <p class="note">これまでに置いた部屋の数です。</p>
+    <div class="dex">${Object.keys(R.ROOMS).map((r) => `<div><b>${R.ROOMS[r][1]}</b>${R.ROOMS[r][0]}<span>${s.rooms[r] || 0}回</span></div>`).join("")}</div>
+    ${footer()}`;
+  $("back").onclick = home;
+  bindFooter();
+}
+
+window.__md = { mode: () => MODE, R, D, dailyList, hardList, houseOf, starsOf, todayKey, dayNo, shareText, streak, load, valid, cur: () => cur, play: (m) => { if (m) MODE = m; play(); } };
+home();
+if ("serviceWorker" in navigator && location.protocol === "https:" && /github\.io$/.test(location.hostname)) navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>
