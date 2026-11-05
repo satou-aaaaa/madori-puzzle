@@ -1,0 +1,8 @@
+{
+  "screens": [
+    { "name": "今日の3軒", "click": ["#go-d"] },
+    { "name": "練習", "click": ["#go-p", ".lv button"] },
+    { "name": "カレンダー", "click": ["#go-cal"] },
+    { "name": "実績", "click": ["#go-ach"] }
+  ]
+}
