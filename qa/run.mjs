@@ -53,7 +53,7 @@ check("README の URL のすぐ後ろに全角の字を続けない（Link check
 const ext = [...html.matchAll(/(?:src|href)="(https?:[^"]+)"/g)].map((m) => m[1]).filter((u) => !/^https:\/\/fonts\.googleapis\.com(\/|$)|^https:\/\/ko-fi\.com\/satouaaaaa$/.test(u));
 check("外から読むのは文字（Google Fonts）だけ。スクリプト・広告・解析を入れない", ext.length === 0, ext.join(","));
 check("CSP で通信先を自分だけにしている", /connect-src 'self'/.test(html) && !/connect-src[^;"]*https/.test(html));
-check("Math.random は練習の家選びだけ（今日の3軒・上級は日付で決まる）", (html.match(/Math\.random/g) || []).length === 1 && !/Math\.random/.test(readFileSync(path.join(root, "rules.js"), "utf8")));
+check("Math.random は練習・とことんの家選びだけ（今日の3軒・上級は日付で決まる）", (html.match(/Math\.random/g) || []).length === 3 && !/Math\.random/.test(readFileSync(path.join(root, "rules.js"), "utf8")));
 check("画面にお笑いの言葉を入れない（本物っぽく）", !/お笑い|ギャグ|ボケ|ツッコミ|なんでやねん|（うそ）/.test(html));
 { const og = (k) => (html.match(new RegExp(`<meta (?:property|name)="${k}" content="([^"]+)"`)) || [])[1] || "";
   const png = readFileSync(path.join(root, "og.png"));
@@ -394,6 +394,29 @@ try {
     await pz.click('.cal button[data-k="2026-11-13"]');
     check("開いたまま日付が進んで過去7日から外れた日は、あとから始めない", !(await pz.evaluate(() => window.__md.mode())).startsWith("a"));
     await pz.close(); }
+  { // とことん：家が次々に出る・平屋→二世帯→注文住宅→希望の多い家・ヒントは🎫を使う・降りると自己ベスト（2026-11-05 satou さん「一日で遊べる量が少なすぎる」）
+    const pe = await pageAt("2026-11-20", 390, base());
+    check("とことんの並び（500回）：平屋3→二世帯7→注文住宅20→希望の多い家30、1回の中で同じ家は出ず、どの家もある", await pe.evaluate(() => { const g = window.__md; for (let n = 0; n < 500; n++) { const L = g.endlessList(); if (L.length !== 60 || new Set(L.map((x) => x.s + ":" + x.n)).size !== 60) return false; if (!L.every((x, i) => x.s === (i < 3 ? 0 : i < 10 ? 1 : i < 30 ? 2 : 3))) return false; if (!L.every((x) => Number.isInteger(x.n) && x.n >= 0 && (x.s === 3 ? g.D.H : g.D.P[x.s])[x.n])) return false; } return true; }));
+    check("とことんは進むほど難しくなる（部屋の数と希望の種類が減らない・最後は玄関も決まっていない家）", await pe.evaluate(() => { const g = window.__md; for (let n = 0; n < 20; n++) { const H = g.endlessList().map(g.houseOf); for (let i = 1; i < H.length; i++) if (H[i].S.rooms.length < H[i - 1].S.rooms.length || H[i].S.types.length < H[i - 1].S.types.length) return false; if (H[H.length - 1].S.fixed) return false; } return true; }));
+    check("ホームに「とことん」の大きなボタン", (await pe.locator("#go-e.main").count()) === 1);
+    await pe.click("#go-e");
+    for (let j = 0; j < 3; j++) { await solveNow(pe); await pe.click("#next"); }
+    check("とことんは何軒目かを出し、🎫が3枚", (await pe.textContent("header")).includes("4軒目") && (await pe.evaluate(() => window.__md.load().runs.e.life)) === 3);
+    await pe.click("#hint");
+    check("とことんのヒントは🎫を1枚使う", (await pe.evaluate(() => window.__md.load().runs.e.life)) === 2);
+    await pe.click("#back"); await pe.click("#go-e");
+    check("とことんは途中で閉じても続きから（4軒目・🎫2・ヒント1回のまま）", (await pe.textContent("header")).includes("4軒目") && (await pe.evaluate(() => window.__md.load().runs.e.life)) === 2 && (await pe.evaluate(() => window.__md.cur().hints)) === 1);
+    await pe.click("#quit");
+    check("降りると建てた数と自己ベスト更新が出て、記録に残る（今日の記録・連続には入らない）", (await pe.textContent("#eres")).includes("3軒") && (await pe.textContent("#ebest")).includes("自己ベスト更新") && (await pe.evaluate(() => { const s = window.__md.load(); return s.ebest === 3 && !s.runs.e && Object.keys(s.days).length === 0 && s.homes === 3; })));
+    check("終わりの画面に「もう一度とことん」の大きなボタン", (await pe.locator("#go-e.main").count()) === 1);
+    await pe.click("#go-e"); await pe.click("#quit");
+    check("ベストに届かないと、ベストと「あと何軒で更新」を出し、ベストは下げない", (await pe.textContent("#ebest")).includes("あと4軒で更新") && (await pe.evaluate(() => window.__md.load().ebest)) === 3);
+    await pe.click("#go-e");
+    await pe.evaluate((k) => { const s = JSON.parse(localStorage.getItem(k)); s.runs.e.life = 0; localStorage.setItem(k, JSON.stringify(s)); }, KEY); await pe.click("#back"); await pe.click("#go-e");
+    check("🎫が無いとヒントは押せない", await pe.locator("#hint").isDisabled());
+    await pe.evaluate((k) => { const s = JSON.parse(localStorage.getItem(k)); s.runs.e.life = 3; s.runs.e.res = Array.from({ length: 30 }, () => ({ h: 0, r: 0 })); s.runs.e.cur = null; localStorage.setItem(k, JSON.stringify(s)); }, KEY); await pe.click("#back"); await pe.click("#go-e");
+    check("とことんの希望の多い家は、ヒントが使え、✓✗も出る（上級とちがう）", (await pe.textContent("header")).includes("希望の多い家") && !(await pe.locator("#hint").isDisabled()) && (await pe.evaluate(() => window.__md.cur().hard)) === false && !(await pe.textContent(".who")).includes("完成まで出ません"));
+    await pe.close(); }
   { // 320px・390px：ホーム・実績・カレンダー・あとから・結果が横にはみ出さず、押せる所は44px以上
     const st = base(); st.days["2026-11-19"] = { h: [0, 0, 0], r: [0, 1, 0] }; st.adays["2026-11-15"] = { h: [1, 0, 0], r: [0, 0, 0] }; st.hdays["2026-11-19"] = { h: [0, 0], r: [0, 0] }; st.homes = 8;
     mkdirSync(path.join(root, "qa-report"), { recursive: true });
@@ -404,7 +427,9 @@ try {
       await pw.click('.cal button[data-k="2026-11-18"]'); await look("late-play");
       for (let j = 0; j < 3; j++) { await solveNow(pw); if (j === 2) await look("late-done"); await pw.click("#next"); }
       await look("late-result"); await pw.click("#back"); await pw.click("#go-d"); for (let j = 0; j < 3; j++) { await solveNow(pw); await pw.click("#next"); } await look("result");
-      check(`幅${w}px：ホーム・実績・カレンダー・あとから・結果が横にはみ出さず、押せる所は44px以上`, bad.length === 0, bad.join(" "));
+      check(`幅${w}px：今日の3軒の結果に「続けて遊ぶ：とことん」の大きなボタン`, (await pw.locator("#go-e.main").count()) === 1);
+      await pw.click("#go-e"); await look("endless"); await solveNow(pw); await pw.click("#next"); await pw.click("#quit"); await look("endless-end");
+      check(`幅${w}px：ホーム・実績・カレンダー・あとから・結果・とことん（遊ぶ・終わり）が横にはみ出さず、押せる所は44px以上`, bad.length === 0, bad.join(" "));
       await pw.close();
     } }
 } catch (e) {
