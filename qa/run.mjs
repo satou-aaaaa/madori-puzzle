@@ -407,6 +407,43 @@ try {
       check(`幅${w}px：ホーム・実績・カレンダー・あとから・結果が横にはみ出さず、押せる所は44px以上`, bad.length === 0, bad.join(" "));
       await pw.close();
     } }
+  { // 色だけで分けない・読み上げ・動きを減らす（shared-workflows routines/game-dev.md A1・A7・A8）
+    const pa = await newPage();
+    await pa.evaluate(() => { window.__vib = 0; try { Object.defineProperty(navigator, "vibrate", { configurable: true, value: () => { window.__vib++; return true; } }); } catch (e) {} });
+    await pa.click("#howto-ok"); await pa.click("#go-d");
+    const c0 = await curM(pa);
+    await pa.click(`#pl .cell[data-c="0"]`); await pa.waitForTimeout(80);
+    const live = await pa.textContent("#live");
+    check("部屋を置くと、知らせの場所（role=status）に部屋・場所・かなった希望の数が文字で出る", (await pa.getAttribute("#live", "role")) === "status" && live.includes("置きました") && live.includes("北西") && /かなった希望 \d+\/\d+/.test(live), live);
+    const st = await pa.evaluate(() => {
+      const dots = [...document.querySelectorAll(".dots i")].map((i) => ({ cls: i.className, h: i.getBoundingClientRect().height, bg: getComputedStyle(i).backgroundColor }));
+      const cells = [...document.querySelectorAll("#pl .cell")].map((b) => b.getAttribute("aria-label"));
+      const lis = [...document.querySelectorAll("#wish li")].map((li) => ({ cls: li.className, sr: [...li.querySelectorAll(".sr")].map((s) => s.textContent).join(""), ol: getComputedStyle(li).outlineStyle }));
+      return { dots, cells, lis };
+    });
+    const on = st.dots.find((d) => d.cls === "on"), rest = st.dots.filter((d) => d.cls === "");
+    check("進み具合の点は形でも分かる（いま＝高い・まだ＝中が空）", on && rest.length && rest.every((d) => d.h < on.h && /rgba\(0, 0, 0, 0\)|transparent/.test(d.bg)), JSON.stringify(st.dots));
+    check("家のますの名前に場所と中身が入る（例「北西：リビング」・空きは「空き」）", st.cells.length === 6 && st.cells.every((l) => /^(北|南)(西|東|のまん中)：/.test(l)) && st.cells[0].includes(c0.rooms[0] === "gen" ? "玄関" : "：") && st.cells.slice(1).some((l) => l.endsWith("空き")), st.cells.join(" / "));
+    check("希望のかなった・かなっていないは、✓✗ に加えて読み上げの文字（と点線の縁）でも出る", st.lis.every((l) => (l.cls.includes("ok") ? l.sr.startsWith("かなった：") : l.cls.includes("ng") ? l.sr.startsWith("かなっていない：") && l.ol === "dashed" : !/かな/.test(l.sr))), JSON.stringify(st.lis));
+    await pa.click("#hint"); await pa.waitForTimeout(80);
+    const lk = await pa.evaluate(() => [...document.querySelectorAll("#pl .cell.lock")].map((b) => b.getAttribute("aria-label")));
+    check("ヒントで置いた部屋は 🔒 に加えて名前でも「動かせない」と分かり、知らせにも出る", lk.length === 1 && lk[0].includes("ヒントで置いた") && (await pa.textContent("#live")).includes("場所を教えました"), lk.join());
+    const selCell = await pa.evaluate(() => { const b = [...document.querySelectorAll("#pl .cell.on")].find((x) => !x.classList.contains("lock")); if (!b) return null; b.click(); return document.querySelector(`#pl .cell[data-c="${b.dataset.c}"]`).getAttribute("aria-label"); });
+    check("選んだますは枠に加えて名前でも「選んでいる」と分かる", !selCell || selCell.includes("選んでいる"), selCell);
+    await solveNow(pa); await pa.waitForTimeout(120);
+    check("完成の知らせが文字で出て、取れなかった星は ☆（色だけで分けない）", (await pa.textContent("#live")).includes("完成") && /^☆+$/.test(await pa.locator(".verdict .stars .off").textContent()));
+    check("ふつうの設定では、置いたときに振動する", (await pa.evaluate(() => window.__vib)) > 0);
+    await pa.click("#back"); await pa.click("#go-cal");
+    check("カレンダーの凡例は色に加えて ★ の数でも分かる", /★★★ ヒントなし/.test(await pa.textContent(".legend")) && /★★ ヒント1〜2/.test(await pa.textContent(".legend")));
+    // 色の見分けを助ける・動きを減らす
+    await pa.evaluate(() => { localStorage.setItem("a11y-v1", JSON.stringify({ cvd: true, calm: true })); });
+    await pa.reload(); await pa.click("#howto-ok").catch(() => {});
+    await pa.evaluate(() => { window.__vib = 0; try { Object.defineProperty(navigator, "vibrate", { configurable: true, value: () => { window.__vib++; return true; } }); } catch (e) {} });
+    await pa.click("#go-d"); await pa.click(`#pl .cell[data-c="0"]`);
+    const cv = await pa.evaluate(() => ({ cvd: document.documentElement.classList.contains("a11y-cvd"), ok: getComputedStyle(document.documentElement).getPropertyValue("--ok").trim().toLowerCase(), vib: window.__vib }));
+    check("「色の見分けを助ける」で、かなった色が青（#0072B2）に替わる", cv.cvd && cv.ok === "#0072b2", JSON.stringify(cv));
+    check("「動きを減らす」で振動しない", cv.vib === 0, String(cv.vib));
+    await pa.close(); }
 } catch (e) {
   check("QA の操作が最後まで完了する", false, e.message.split("\n")[0]);
 } finally {
@@ -430,6 +467,12 @@ try {
   await browser.close();
 }
 check("画面のエラーが無い", errors.length === 0, errors.slice(0, 3).join(" | "));
+
+{ // 見やすさ・読みやすさ・偏り（shared-workflows template/qa/a11y.mjs の写し。routines/game-dev.md「だれでも遊べるように」）
+  const { spawnSync } = await import("node:child_process");
+  const a = spawnSync(process.execPath, [path.join(root, "qa", "a11y.mjs")], { encoding: "utf8", env: process.env });
+  check("見やすさ・読みやすさの検査（qa/a11y.mjs。中身は qa-report/a11y.md）", a.status === 0, (a.stdout.match(/^- ❌.*$/gm) || []).join(" / ") || (a.status ? a.stderr.slice(-300) : ""));
+}
 
 const ng = results.filter((r) => !r.ok);
 const md = `# 間取りパズル QA\n\n${results.map((r) => `- ${r.ok ? "✅" : "❌"} ${r.name}${r.detail ? `（${r.detail}）` : ""}`).join("\n")}\n\n${ng.length ? `❌ ${ng.length}件` : `✅ ${results.length}項目すべて通過`}\n`;
