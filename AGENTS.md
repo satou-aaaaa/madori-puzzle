@@ -35,6 +35,7 @@ node qa/run.mjs   # 全部の家の答えが1つ・要らない希望が無い�
 - 押せる所は高さ44px以上、希望の文は幅320pxでも1行（QA が見る）。機能を足す・直すたびに `qa/run.mjs` に検査を足す。乱数で組む部分は何百回も作って確かめる（shared-workflows `incidents/2026-10-31-roppo-empty-village.md`）。
 - PWA（`manifest.webmanifest`・`sw.js`・`icon-*.png`）：画面のファイルを足したら `sw.js` の `SHELL` にも足し、中身を大きく変えたら `CACHE` の版を上げる。アイコンは `node tools/make-icons.cjs`、SNS 用の絵 `og.png` は `node tools/make-og.cjs`（今日の家を入れない）。
 - 引き継ぎコード（別の端末へ記録を移す）：`transfer.js`・`qa/transfer-check.mjs` は shared-workflows の `template/` の写し（ここで直さない。直すときはひな形を直して配り、`引き継ぎの版` を上げる）。`index.html` の script の `data-keys` は記録のキーだけを書く。記録の形を変えたら `qa/run.mjs` の `checkTransfer` の `sample` も合わせる。sw.js の `SHELL` から `./transfer.js` を外さない（shared-workflows `routines/game-dev.md`「引き継ぎコード」）。
+- 見やすさ：`</head>` の前の見やすさの設定（`<!-- a11y:begin -->`〜`end`）は shared-workflows `template/a11y/a11y.html` の写しで、ここでは直さない。`qa/a11y.mjs` も `template/qa/a11y.mjs` の写し（画面の足し方・許しは `qa/a11y.json` に理由つき）。色だけで分けない・コントラスト 4.5:1・知らせは aria-live（`#live`）・決めつけの言葉を使わない（shared-workflows `routines/game-dev.md`「だれでも遊べるように」）。希望は ✓✗ と読み上げ用の「かなった：」（かなわない希望は点線の縁）、家のますの名前は「北西：リビング（選んでいる・ヒントで置いた）」、進み具合の点は形（高さ・中が空）、取れない星は ☆、カレンダーの凡例は ★ の数、あとから遊べる日は点線と ▶。「色の見分けを助ける」（`html.a11y-cvd`）では、かなった＝青 #0072B2・かなわない＝朱にし、選んだ部屋の枠を太い点線にする。住む人の絵文字は性別・年齢・家族の形を混ぜる（🧑 も使う）。
 - 公開リポジトリなので、個人情報・鍵を入れない。
 
 ## 公開
