@@ -275,6 +275,7 @@ try {
     check("今日の記録に、家ごとの書き直しの数が残る（ヒントの数と並べて）", JSON.stringify(rec.h) === "[0,0,0]" && rec.r[0] === 0 && rec.r[1] >= 1 && rec.r[2] === 0, JSON.stringify(rec));
     check("結果の画面に書き直しなしの家の印が出る", (await pf.locator(".minis p").allTextContents()).filter((t) => t.includes("書き直しなし")).length === 2);
     check("初めて今日の3軒を終えると結果に「🏅 実績：はじめての3軒」", (await pf.textContent("#achnew")).includes("はじめての3軒") && (await pf.textContent("#achnew")).includes("書き直しなし"));
+    check("結果に「あと少しの実績」を1つだけ出す：まだの実績のうち目標にいちばん近いもの（取った・0のものは選ばない。研究の要点 12）", await pf.evaluate(() => { const g = window.__md, s = g.load(), t = g.tally(s), nx = g.nextAch(s), el = document.querySelectorAll("#achnext"); if (!nx) return el.length === 0; const cand = g.ACH.filter((a) => t[a[4]] > 0 && t[a[4]] < a[5]); return el.length === 1 && el[0].textContent.includes(nx.name) && el[0].textContent.includes("あと" + nx.left) && cand.every((a) => t[a[4]] / a[5] <= nx.r + 1e-12) && !g.achGot(s).includes(nx.id); }) && await pf.evaluate(() => window.__md.nextAch(window.__md.load()) !== null));
     await pf.click("#back"); await pf.click("#go-d");
     check("結果を開き直すと実績の知らせは出ない（うるさくしない）", (await pf.locator("#achnew").count()) === 0 && (await pf.locator(".share").count()) === 1);
     await pf.close(); }
