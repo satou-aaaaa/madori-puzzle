@@ -174,7 +174,6 @@ html.a11y-cvd .cal .c.miss{border:2px dotted #B34A00}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 /* all:unset のボタン（カレンダーのます目など）でも枠が消えないよう、いちばん最後に強く書く（2026-11-04 CodeRabbit） */
 :is(.icon,button,a):focus-visible{outline:2px solid var(--sel)!important;outline-offset:2px}
-.life{font-size:18px;letter-spacing:2px}.life .off{opacity:.25}
 </style>
 <!-- a11y:begin 見やすさの設定 v5（shared-workflows template/a11y/a11y.html の写し。ここでは直さず、ひな形を直して全部のゲームへ写す。drift-check と qa/a11y.mjs が同じ中身か見る） -->
 <style id="a11y-css">
@@ -375,9 +374,18 @@ function houseOf(it) {
   cache.set(k, h); return h;
 }
 // とことん：平屋3→二世帯7→注文住宅20→希望の多い家30軒を、毎回ちがう並びで次々に出す（1回の中で同じ家は出ない。乱数は練習ととことんだけ）
-const ELIFE = 3, ERAMP = [[0, 3], [1, 7], [2, 20], [3, 30]];
-function endlessList() { const out = []; for (const [sz, n] of ERAMP) { const all = Array.from({ length: sz === 3 ? HPER : PER }, (_, j) => j); for (let j = 0; j < n; j++) { const x = j + Math.floor(Math.random() * (all.length - j)); [all[j], all[x]] = [all[x], all[j]]; out.push({ s: sz, n: all[j] }); } } return out; }
-const lifeStr = (n) => "🎫".repeat(Math.max(0, n)) + `<span class="off">${"🎫".repeat(Math.max(0, ELIFE - n))}</span>`;
+// 好きなだけ遊べる：まちがい・ヒントで終わらず、何も減らない。並びが残り少なくなったら moreList で希望の多い家を足して続ける（2026-11-06 satou さん）
+// recent：最近完成した家（"種類:番号" → 時刻、新しい RECENT 軒）。練習・とことんは、まだ遊んでいない家を先に、最近の家ほど後ろに回す（freshOrder）
+const ERAMP = [[0, 3], [1, 7], [2, 20], [3, 30]], EMORE = 20, RECENT = 300;
+const keyOf = (it) => it.s + ":" + it.n, poolOf = (sz) => Array.from({ length: sz === 3 ? HPER : PER }, (_, j) => ({ s: sz, n: j }));
+function shuffle(a) { for (let j = a.length - 1; j > 0; j--) { const x = Math.floor(Math.random() * (j + 1)); [a[j], a[x]] = [a[x], a[j]]; } return a; }
+// 混ぜてから、最近遊んでいない家を前に（遊んだ家は古い順に後ろへ。比べるのは時刻だけで、乱数は引かない）
+function freshOrder(items, recent = {}) { const a = shuffle(items.slice()), t = (it) => recent[keyOf(it)] || 0; return [...a.filter((it) => !t(it)), ...a.filter((it) => t(it)).sort((x, y) => t(x) - t(y))]; }
+function endlessList(recent = {}) { const out = []; for (const [sz, n] of ERAMP) out.push(...freshOrder(poolOf(sz), recent).slice(0, n)); return out; }
+// 続きの並び：この回でまだ出していない家を、希望の多い家→注文住宅→二世帯→平屋の順に。全部出し終えたら最初から（直前の家は続けない）
+// 周ごと：いまの周で出した家（全部の家を出し終えたら次の周。2周目も4種類から出す。2026-11-06 CodeRabbit）
+function lapUsed(list) { const total = [0, 1, 2, 3].reduce((n, sz) => n + poolOf(sz).length, 0); let used = new Set(); for (const it of list) { used.add(keyOf(it)); if (used.size >= total) used = new Set(); } return used; }
+function moreList(list, recent = {}) { const used = lapUsed(list), last = list.length ? keyOf(list[list.length - 1]) : ""; for (const sz of [3, 2, 1, 0]) { const left = poolOf(sz).filter((it) => !used.has(keyOf(it)) && keyOf(it) !== last); if (left.length) return freshOrder(left, recent).slice(0, EMORE); } return []; }
 const starsOf = (h) => (h === 0 ? 3 : h === 1 ? 2 : 1);
 const starStr = (s) => `<span class="stars" aria-label="星${s}つ">${"★".repeat(s)}<span class="off">${"☆".repeat(3 - s)}</span></span>`;
 
@@ -385,17 +393,18 @@ const starStr = (s) => `<span class="stars" aria-label="星${s}つ">${"★".repe
 // 進行中の遊びはモードごとに分けて持つ（練習を始めても今日・上級の途中経過を消さない）。rooms：部屋 → 置いた回数
 // adays：取りこぼした日をあとから遊んだ記録（日付 → 今日の3軒と同じ形）。連続の日・今日の記録・Ko-fi には数えない
 // 日ごとの記録 { h:[ヒントの数], r:[書き直しの数] }（r はあとから足した。古い記録には無い）
-const fresh = () => ({ v: 1, days: {}, hdays: {}, adays: {}, rooms: {}, homes: 0, runs: {}, tut: false, kofi: {}, ebest: 0 });
+const fresh = () => ({ v: 1, days: {}, hdays: {}, adays: {}, rooms: {}, homes: 0, runs: {}, tut: false, kofi: {}, ebest: 0, recent: {} });
 let MODE = "d";
 let mem = null; // 保存できない環境では、開いているあいだだけここに置く
 // 保存に失敗したあとはメモリと保存の両方を読む。統合の前に両方を fresh() で補う（新しく足したキーが片方にしか無くても失わない）。記録は合わせて数は高いほう、途中経過は同じ日・同じ家なら進んだほう
-const doneOf = (r) => !!r && Array.isArray(r.res) && Array.isArray(r.list) && r.res.length >= r.list.length, recOf = (r) => ({ h: r.res.map((x) => x.h), r: r.res.map((x) => (Number.isInteger(x.r) ? x.r : 1)) });
+const doneOf = (r) => !!r && r.mode !== "e" && Array.isArray(r.res) && Array.isArray(r.list) && r.res.length >= r.list.length, recOf = (r) => ({ h: r.res.map((x) => x.h), r: r.res.map((x) => (Number.isInteger(x.r) ? x.r : 1)) });
 // 途中経過の入れ物の名前：あとからは日付ごとに runs["a:日付"]（別の日を始めても、前の日の途中は消さない）
 const runKey = (mode, date) => (mode === "a" ? "a:" + date : mode);
 const bookOf = (s, m) => (m === "d" ? s.days : m === "h" ? s.hdays : m === "a" ? (s.adays = s.adays || {}) : null);
 // 終わった今日・上級・あとからの回を日ごとの記録に入れる（結果を見る前に別のタブが次の日を保存しても、終えた日を失わない）
 function bank(s, r) { const b = doneOf(r) ? bookOf(s, r.mode) : null; if (!b || b[r.date] || (r.mode === "a" && s.days[r.date])) return false; b[r.date] = recOf(r); return true; }
-function load() { let a = null, b = null; try { b = JSON.parse(localStorage.getItem(KEY)); } catch (e) {} try { a = mem !== null ? JSON.parse(mem) : null; } catch (e) {} if (a && a.v !== 1) a = null; if (b && b.v !== 1) b = null; if (!a || !b) return Object.assign(fresh(), a || b || {}); a = Object.assign(fresh(), a); b = Object.assign(fresh(), b); const [n, o] = (a.t || 0) >= (b.t || 0) ? [a, b] : [b, a]; const s = Object.assign(fresh(), n); for (const k in o) { if (k === "runs" || k === "t") continue; const x = o[k], y = n[k]; if (x && y && typeof x === "object" && typeof y === "object") { s[k] = Object.assign({}, x, y); for (const q in x) if (typeof x[q] === "number" && typeof y[q] === "number") s[k][q] = Math.max(x[q], y[q]); } else if (typeof x === "number" && typeof y === "number") s[k] = Math.max(x, y); else if (x === true) s[k] = true; } const ra = a.runs || {}, rb = b.runs || {}, prog = (r) => (r.res ? r.res.length : 0) * 1000 + (r.cur && r.cur.at ? Object.keys(r.cur.at).length * 10 : 0) + (r.cur && r.cur.mv ? Math.min(r.cur.mv, 9) : 0), idOf = (r) => JSON.stringify([r.list || null, r.id || null]); s.runs = Object.assign({}, n.runs); for (const m of new Set([...Object.keys(ra), ...Object.keys(rb)])) { const x = ra[m], y = rb[m]; if (x === undefined || y === undefined) { if (x || y) s.runs[m] = x || y; continue; } if (!x || !y) { const r = x || y; if (!r || bank(s, r) || doneOf(r)) continue; const bd = bookOf(s, r.mode); if (bd && !bd[r.date]) s.runs[m] = r; continue; } if (x.date !== y.date) { const [w, l] = x.date > y.date ? [x, y] : [y, x]; bank(s, l); s.runs[m] = w; } else if (idOf(x) === idOf(y)) { const px = prog(x), py = prog(y); s.runs[m] = px > py ? x : py > px ? y : n.runs[m]; } } return s; }
+function trimRecent(s) { const r = s.recent || {}, ks = Object.keys(r); if (ks.length > RECENT) for (const x of ks.sort((p, q) => r[p] - r[q] || (p < q ? -1 : 1)).slice(0, ks.length - RECENT)) delete r[x]; return s; } // 最近の家は新しい RECENT 軒だけ（タブを合わせた後も。2026-11-06 CodeRabbit）
+function load() { let a = null, b = null; try { b = JSON.parse(localStorage.getItem(KEY)); } catch (e) {} try { a = mem !== null ? JSON.parse(mem) : null; } catch (e) {} if (a && a.v !== 1) a = null; if (b && b.v !== 1) b = null; if (!a || !b) return trimRecent(Object.assign(fresh(), a || b || {})); a = Object.assign(fresh(), a); b = Object.assign(fresh(), b); const [n, o] = (a.t || 0) >= (b.t || 0) ? [a, b] : [b, a]; const s = Object.assign(fresh(), n); for (const k in o) { if (k === "runs" || k === "t") continue; const x = o[k], y = n[k]; if (x && y && typeof x === "object" && typeof y === "object") { s[k] = Object.assign({}, x, y); for (const q in x) if (typeof x[q] === "number" && typeof y[q] === "number") s[k][q] = Math.max(x[q], y[q]); } else if (typeof x === "number" && typeof y === "number") s[k] = Math.max(x, y); else if (x === true) s[k] = true; } const ra = a.runs || {}, rb = b.runs || {}, prog = (r) => (r.res ? r.res.length : 0) * 1000 + (r.cur && r.cur.at ? Object.keys(r.cur.at).length * 10 : 0) + (r.cur && r.cur.mv ? Math.min(r.cur.mv, 9) : 0), idOf = (r) => JSON.stringify([r.mode === "e" ? null : r.list || null, r.id || null]); s.runs = Object.assign({}, n.runs); for (const m of new Set([...Object.keys(ra), ...Object.keys(rb)])) { const x = ra[m], y = rb[m]; if (x === undefined || y === undefined) { if (x || y) s.runs[m] = x || y; continue; } if (!x || !y) { const r = x || y; if (!r || bank(s, r) || doneOf(r)) continue; const bd = bookOf(s, r.mode); if (bd && !bd[r.date]) s.runs[m] = r; continue; } if (x.date !== y.date) { const [w, l] = x.date > y.date ? [x, y] : [y, x]; bank(s, l); s.runs[m] = w; } else if (idOf(x) === idOf(y)) { const px = prog(x), py = prog(y); s.runs[m] = px > py ? x : py > px ? y : n.runs[m]; } } return trimRecent(s); }
 // 保存の前に読み直す（別のタブで進めた記録を消さない）
 function save(fn) { const s = load(); fn(s); s.t = Math.max(Date.now(), (s.t || 0) + 1); const j = JSON.stringify(s); try { localStorage.setItem(KEY, j); mem = null; } catch (e) { mem = j; } return s; }
 const prevDay = (k) => new Date(Date.parse(k) - 864e5).toISOString().slice(0, 10);
@@ -479,8 +488,8 @@ function home() {
     <p class="lead" data-a11y-say>住む人の希望を、全部かなえる間取りに。<br>答えは1つ。だれでも同じ1日3軒。</p>
     ${done ? `<div class="share">今日の結果　${done.h.map(sq).join("")}</div>` : ""}
     <button class="main" id="go-d">${done ? "今日の結果を見る" : rd ? `続きから（${rd.res.length + 1}軒目）` : `今日の3軒を設計する <small>#${dayNo(k)}</small>`}</button>
-    ${done ? `<button class="main alt" id="go-h">${hdone ? "上級の結果を見る" : rh ? "上級の続きから" : "上級：希望の多い2軒（✓が出ない・ヒントなし）"}</button>` : ""}
-    ${(() => { const re = s.runs.e && !doneOf(s.runs.e) ? s.runs.e : null; return `<button class="main alt" id="go-e">${re ? `とことんの続きから（${re.res.length + 1}軒目）` : "とことん：何軒続けて建てる？"}${s.ebest ? ` <small>自己ベスト ${s.ebest}軒</small>` : ""}</button>`; })()}
+    <button class="main alt" id="go-h">${hdone ? "上級の結果を見る" : rh ? "上級の続きから" : "上級：希望の多い2軒（✓が出ない・ヒントなし）"}</button>
+    ${(() => { const re = s.runs.e || null; return `<button class="main alt" id="go-e">${re ? `とことんの続きから（${re.res.length + 1}軒目）` : "とことん：何軒続けて建てる？"}${s.ebest ? ` <small>自己ベスト ${s.ebest}軒</small>` : ""}</button>`; })()}
     <div class="row"><button class="sub" id="go-p">練習（何度でも）</button><button class="sub" id="go-dex">建てた家 ${s.homes}軒</button></div>
     <div class="row"><button class="sub" id="go-cal" aria-label="カレンダー${late.length ? `（あとから遊べる日 ${late.length}）` : ""}">カレンダー${late.length ? ` <small class="badge">▶${late.length}</small>` : ""}</button><button class="sub" id="go-ach">実績 ${ag}/${ACH.length}</button></div>
     <div class="stats"><div><b>${streak(s.days)}</b><small>連続の日</small></div><div><b>${Object.keys(s.days).length}</b><small>遊んだ日</small></div><div><b>${s.homes}</b><small>建てた家</small></div></div>
@@ -517,10 +526,10 @@ function startRun(mode, opt) {
       s.runs[runKey("a", opt)] = { mode, date: opt, list: dailyList(opt), res: [], cur: null, id: "a" + opt, a0: achGot(s) };
       return;
     }
-    if (mode === "e") { const re = s.runs.e; if (re && !doneOf(re)) return; s.runs.e = { mode, date: k, list: endlessList(), res: [], cur: null, life: ELIFE, id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), a0: achGot(s) }; return; } // とことん：途中なら続きから（日をまたいでも続けられる）
+    if (mode === "e") { const re = s.runs.e; if (re) return; s.runs.e = { mode, date: k, list: endlessList(s.recent), res: [], cur: null, id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), a0: achGot(s) }; return; } // とことん：途中なら続きから（日をまたいでも続けられる）
     if (mode !== "p" && s.runs[mode] && s.runs[mode].date === k) return; // 続きから
     if ((mode === "d" && s.days[k]) || (mode === "h" && s.hdays[k])) return; // 別のタブで今日の分を終えていたら、もう一度は始めない（ホームに戻る）
-    const list = mode === "d" ? dailyList(k) : mode === "h" ? hardList(k) : [{ s: opt, n: Math.floor(Math.random() * PER) }];
+    const list = mode === "d" ? dailyList(k) : mode === "h" ? hardList(k) : freshOrder(poolOf(opt), s.recent).slice(0, 1); // 練習：まだ遊んでいない家から
     s.runs[mode] = { mode, date: k, list, res: [], cur: null, id: Date.now().toString(36), a0: achGot(s) };
   });
   if (ng) return cal();
@@ -534,6 +543,7 @@ function play() {
   const s = load(), run = s.runs[MODE];
   if (!run) return home();
   const i = run.res.length;
+  if (run.mode === "e" && i >= run.list.length - 1) { let grew = false; save((s2) => { const q = s2.runs.e; if (q && q.id === run.id && q.res.length >= q.list.length - 1) { q.list.push(...moreList(q.list, s2.recent)); grew = true; } }); if (grew) return play(); } // とことんは並びを足して続ける（前の版で並びを使い切った回も）
   if (i >= run.list.length) return finish();
   const it = run.list[i], h = houseOf(it), hard = it.s === 3 && run.mode !== "e"; // とことんの希望の多い家は、✓✗が出てヒントも使える
   const saved = run.cur && run.cur.i === i ? run.cur : null;
@@ -544,15 +554,15 @@ function play() {
   const label = run.mode === "h" ? "上級" : run.mode === "p" ? `練習・${h.size}` : run.mode === "e" ? `とことん・${it.s === 3 ? "希望の多い家" : h.size}` : run.mode === "a" ? `${md(run.date)} あとから` : h.size;
   app.innerHTML = `
     <header><button class="icon" id="back" aria-label="もどる">←</button>
-      ${run.mode === "e" ? `<span class="life" id="life" aria-label="ヒントに使える回数 ${run.life}">${lifeStr(run.life)}</span><span style="font-size:13px;color:var(--ink2)">${label} ${i + 1}軒目${s.ebest ? `（ベスト ${s.ebest}）` : ""}</span></header>` : `<div class="dots" aria-label="${i + 1}軒目／${run.list.length}軒">${run.list.map((_, j) => `<i class="${j < i ? "done" : j === i ? "on" : ""}"></i>`).join("")}</div>
+      ${run.mode === "e" ? `<span style="font-size:13px;color:var(--ink2)">${label} ${i + 1}軒目${s.ebest ? `（ベスト ${s.ebest}）` : ""}</span></header>` : `<div class="dots" aria-label="${i + 1}軒目／${run.list.length}軒">${run.list.map((_, j) => `<i class="${j < i ? "done" : j === i ? "on" : ""}"></i>`).join("")}</div>
       <span style="font-size:13px;color:var(--ink2)">${label} ${i + 1}/${run.list.length}</span></header>`}
     <div class="who"><b aria-hidden="true">${h.who}</b><span data-a11y-say>住む人の希望（${h.q.length}つ）${hard ? "<br><small style='color:var(--ink2)'>上級：かなったかどうかは完成まで出ません</small>" : ""}</span></div>
     <ul class="wish" id="wish" data-a11y-say></ul>
     <div id="pl"></div>
     <div class="tray" id="tray"></div>
-    <div class="status"><span id="left"></span>${hard ? "<span>ヒントなし</span>" : `<button class="sub" id="hint" style="min-height:44px;padding:0 14px">ヒント${run.mode === "e" ? "（🎫1）" : ""}</button>`}</div>
+    <div class="status"><span id="left"></span>${hard ? "<span>ヒントなし</span>" : `<button class="sub" id="hint" style="min-height:44px;padding:0 14px">ヒント</button>`}</div>
     <div class="row"><button class="sub" id="clear">全部もどす</button></div>
-    ${run.mode === "e" ? `<p class="note">ヒント1回で🎫を1枚使います（🎫が無いとヒントは出ません）。</p><button class="sub" id="quit" style="width:100%">ここで降りる（${i}軒で終える）</button>` : ""}
+    ${run.mode === "e" ? `<p class="note">ヒントを使っても終わりません。好きなところで降りられます。</p><button class="sub" id="quit" style="width:100%">ここで降りる（${i}軒で終える）</button>` : ""}
     <div id="after"></div>`;
   $("back").onclick = home;
   $("clear").onclick = clearAll;
@@ -585,7 +595,7 @@ function paint() {
   document.querySelectorAll(".rm").forEach((b) => (b.onclick = () => { if (cur.done) return; cur.sel = b.dataset.r; paint(); }));
   $("left").textContent = cur.done ? "" : `のこり ${left.length}部屋${cur.hints ? `・ヒント ${cur.hints}` : ""}`;
   $("clear").disabled = cur.done || S.rooms.every((r) => cur.at[r] == null || !movable(r));
-  if ($("hint")) $("hint").disabled = cur.done || cur.hints >= 2 || (MODE === "e" && lifeOf() <= 0);
+  if ($("hint")) $("hint").disabled = cur.done || cur.hints >= 2;
 }
 function tapCell(c) {
   if (cur.done) return;
@@ -609,12 +619,10 @@ function tapCell(c) {
 }
 function clearAll() { if (cur.done) return; if (cur.h.S.rooms.some((r) => movable(r) && cur.at[r] != null)) cur.mv++; for (const r of cur.h.S.rooms) if (movable(r)) delete cur.at[r]; cur.sel = cur.h.S.rooms.find((r) => cur.at[r] == null) || null; keep(); paint(); }
 // ヒント：まだ答えのますにない部屋を1つ、答えのますに置いて動かせなくする（そこにあった部屋は台に戻す）
-const lifeOf = () => { const r = load().runs.e; return r ? r.life || 0 : 0; };
 function hint() {
   if (cur.done || cur.hints >= 2) return;
   const h = cur.h, r = h.S.rooms.find((x) => movable(x) && cur.at[x] !== h.sol[x]);
   if (!r) return;
-  if (MODE === "e") { let ok = false; save((s) => { const q = s.runs.e; if (same(q) && (q.life || 0) > 0) { q.life--; ok = true; } }); if (!ok) return paint(); const l = $("life"); if (l) { l.innerHTML = lifeStr(lifeOf()); l.setAttribute("aria-label", "ヒントに使える回数 " + lifeOf()); } } // とことんはヒント1回で🎫1枚
   const c = h.sol[r], other = h.S.rooms.find((x) => cur.at[x] === c); if (other) delete cur.at[other];
   cur.at[r] = c; cur.lock.push(r); cur.hints++; cur.sel = h.S.rooms.find((x) => cur.at[x] == null) || null;
   keep(); paint(); toast(`${R.ROOMS[r][0]}の場所を教えました`); check();
@@ -625,12 +633,12 @@ function check() {
   if (!h.q.every((q) => R.holds(q, cur.at, h.S) === true)) { if (cur.hard) toast("かなっていない希望があります"); return; }
   if (!same(load().runs[MODE])) { toast("別の画面で先に進んでいます"); return play(); }
   let saved = false;
-  const s = save((s) => { const r = s.runs[MODE]; if (!same(r)) return; saved = true; r.res.push({ h: cur.hints, r: cur.mv }); r.cur = null; s.homes++; for (const x of h.S.rooms) s.rooms[x] = (s.rooms[x] || 0) + 1; });
+  const s = save((s) => { const r = s.runs[MODE]; if (!same(r)) return; saved = true; r.res.push({ h: cur.hints, r: cur.mv }); r.cur = null; s.homes++; s.recent = s.recent || {}; s.recent[keyOf(cur.it)] = Date.now(); trimRecent(s); if (r.mode === "e" && r.res.length >= r.list.length - 1) r.list.push(...moreList(r.list, s.recent)); for (const x of h.S.rooms) s.rooms[x] = (s.rooms[x] || 0) + 1; });
   if (!saved) { toast("別の画面で先に進んでいます"); return play(); } // 保存できなかった完成は出さない
   cur.done = true; buzz([10, 40, 10]);
   const st = starsOf(cur.hints);
   paint(); say(`完成！星${st}つ。希望を${h.q.length}つ、全部かなえました`);
-  const r = s.runs[MODE], fin = r && r.res.length >= r.list.length;
+  const r = s.runs[MODE], fin = r && r.mode !== "e" && r.res.length >= r.list.length;
   $("after").innerHTML = `<div class="verdict" role="status">
     <div class="hd">完成！ ${starStr(st)}</div>
     ${cur.mv === 0 && cur.hints === 0 ? `<span class="clean" id="clean">書き直しなし</span>` : ""}
@@ -662,10 +670,11 @@ function finish() {
 function endFinish(run) {
   const n = run.res.length; let prev = 0, newAch = [];
   save((s2) => { prev = s2.ebest || 0; s2.ebest = Math.max(prev, n); const c = s2.runs.e; if (c && c.id === run.id) s2.runs.e = null; if (Array.isArray(run.a0)) newAch = achGot(s2).filter((id) => !run.a0.includes(id)); });
-  const s = load(), best = n > prev && n > 0;
+  const s = load(), best = n > prev && n > 0, hints = run.res.reduce((a, x) => a + (x.h || 0), 0);
   app.innerHTML = `
     <header><button class="icon" id="back" aria-label="ホームへ">←</button><h1>間取りパズル<small>とことん</small></h1><span></span></header>
     <p class="big" id="eres">${n}軒 完成</p>
+    ${n ? `<p class="note" id="ehint">ヒント ${hints}回</p>` : ""}
     <p class="note" id="ebest">${best ? "🎉 自己ベスト更新！" : !s.ebest ? "1軒建てると自己ベストに残ります" : `自己ベスト ${s.ebest}軒${s.ebest > n ? `（あと${s.ebest - n + 1}軒で更新）` : ""}`}</p>
     ${newAch.length ? `<p class="achnew" id="achnew">${newAch.map((id) => `🏅 実績：${ACH.find((a) => a[0] === id)[1]}`).join("<br>")}</p>` : ""}
     ${n ? `<div class="minis">${run.list.slice(0, n).map((it, j) => { const h = houseOf(it); return `<div>${planHtml(h, h.sol, { mini: true })}<p>${it.s === 3 ? "希望の多い家" : h.size} ${starStr(starsOf(run.res[j].h))}</p></div>`; }).join("")}</div>` : ""}
@@ -774,7 +783,7 @@ function cal(ym) {
   bindFooter(); window.scrollTo(0, 0);
 }
 
-window.__md = { endlessList, ELIFE, ERAMP, mode: () => MODE, runKey, R, D, dailyList, hardList, houseOf, starsOf, todayKey, dayNo, shareText, streak, load, valid, lateDays, ACH, achGot, nextAch, tally, cal, cur: () => cur, play: (m) => { if (m) MODE = m; play(); } };
+window.__md = { endlessList, moreList, lapUsed, trimRecent, freshOrder, keyOf, poolOf, RECENT, ERAMP, mode: () => MODE, runKey, R, D, dailyList, hardList, houseOf, starsOf, todayKey, dayNo, shareText, streak, load, valid, lateDays, ACH, achGot, nextAch, tally, cal, cur: () => cur, play: (m) => { if (m) MODE = m; play(); } };
 home();
 if ("serviceWorker" in navigator && location.protocol === "https:" && /github\.io$/.test(location.hostname)) navigator.serviceWorker.register("sw.js").catch(() => {});
 </script>
