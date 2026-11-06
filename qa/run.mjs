@@ -432,6 +432,9 @@ try {
     await pe.click("#go-e");
     await pe.evaluate((k) => { const s = JSON.parse(localStorage.getItem(k)); s.runs.e.life = 0; localStorage.setItem(k, JSON.stringify(s)); }, KEY); await pe.click("#back"); await pe.click("#go-e");
     check("前の版の🎫の残り（life:0）が入った途中経過も読め、ヒントは押せる", (await pe.textContent("header")).includes("1軒目") && !(await pe.locator("#hint").isDisabled()));
+    { const h0 = await pe.evaluate(() => window.__md.cur().hints); await pe.click("#hint"); check("…ヒントを押すとヒントの数が増える（何も減らない）", (await pe.evaluate(() => window.__md.cur().hints)) === h0 + 1); }
+    check("2周目も4種類から出し、2周目の中でも同じ家を出さない（moreList の周）", await pe.evaluate(() => { const g = window.__md, all = g.D.P.reduce((a, x) => a + x.length, 0) + g.D.H.length; const L = g.endlessList(); while (L.length < all * 2) { const m = g.moreList(L); if (!m.length) return false; L.push(...m); } const lap2 = L.slice(all, all * 2); return lap2.length === all && new Set(lap2.map(g.keyOf)).size === all && new Set(lap2.map((it) => it.s)).size === 4; }));
+    check("合わせた後も最近の家は RECENT 軒まで（新しいほうを残す）", await pe.evaluate(() => { const g = window.__md, r = {}; for (let i = 0; i < 650; i++) r["x:" + i] = 1000 + i; const s = g.trimRecent({ recent: r }); const ks = Object.keys(s.recent); return ks.length === g.RECENT && !s.recent["x:0"] && s.recent["x:649"] === 1649; }));
     await pe.evaluate((k) => { const s = JSON.parse(localStorage.getItem(k)); s.runs.e.res = Array.from({ length: 30 }, () => ({ h: 0, r: 0 })); s.runs.e.cur = null; localStorage.setItem(k, JSON.stringify(s)); }, KEY); await pe.click("#back"); await pe.click("#go-e");
     check("とことんの希望の多い家は、ヒントが使え、✓✗も出る（上級とちがう）", (await pe.textContent("header")).includes("希望の多い家") && !(await pe.locator("#hint").isDisabled()) && (await pe.evaluate(() => window.__md.cur().hard)) === false && !(await pe.textContent(".who")).includes("完成まで出ません"));
     await pe.evaluate((k) => { const s = JSON.parse(localStorage.getItem(k)); s.runs.e.res = Array.from({ length: 59 }, () => ({ h: 2, r: 3 })); s.runs.e.cur = null; localStorage.setItem(k, JSON.stringify(s)); }, KEY); await pe.click("#back"); await pe.click("#go-e");
@@ -524,7 +527,7 @@ try {
     await pf.close();
   } catch (e) { check("キーボードで選んだボタン（カレンダーのあとから遊ぶ日も）に枠が出る", false, e.message.split("\n")[0]); }
   try { // 引き継ぎコード（別の端末へ記録を移す。shared-workflows template/qa/transfer-check.mjs）
-    await checkTransfer({ browser, url, game: "madori-puzzle", sample: { "madori-v1": JSON.stringify({ v: 1, tut: true }) }, check, open: async (p) => { await p.click("#howto-ok", { timeout: 1500 }).catch(() => {}); } });
+    await checkTransfer({ browser, url, game: "madori-puzzle", sample: { "madori-v1": JSON.stringify({ v: 1, tut: true, recent: { "0:3": 1762400000000, "2:41": 1762400100000, "3:700": 1762400200000 } }) }, check, open: async (p) => { await p.click("#howto-ok", { timeout: 1500 }).catch(() => {}); } });
   } catch (e) { check("引き継ぎコード", false, e.message.split("\n")[0]); }
   await browser.close();
 }
