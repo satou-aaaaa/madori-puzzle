@@ -564,7 +564,7 @@ function play() {
     <div class="tray" id="tray"></div>
     <div class="status" id="ctl"><span id="left"></span>${hard ? "<span>ヒントなし</span>" : `<button class="sub" id="hint" style="min-height:44px;padding:0 14px">ヒント</button>`}</div>
     <div class="row" id="ctl2"><button class="sub" id="clear">全部もどす</button></div>
-    ${run.mode === "e" ? `<p class="note">ヒントを使っても終わりません。好きなところで降りられます。</p><button class="sub" id="quit" style="width:100%">ここで降りる（${i}軒で終える）</button>` : ""}
+    ${run.mode === "e" ? `<p class="note" id="enote">ヒントを使っても終わりません。好きなところで降りられます。</p><button class="sub" id="quit" style="width:100%">ここで降りる（${i}軒で終える）</button>` : ""}
     <div id="after"></div>`;
   $("back").onclick = home;
   $("clear").onclick = clearAll;
@@ -598,11 +598,11 @@ function paint() {
   $("left").textContent = cur.done ? "" : `のこり ${left.length}部屋${cur.hints ? `・ヒント ${cur.hints}` : ""}`;
   $("clear").disabled = cur.done || S.rooms.every((r) => cur.at[r] == null || !movable(r));
   if ($("hint")) $("hint").disabled = cur.done || cur.hints >= 2;
-  // 次に押す所を一言で（選んだ部屋の名前だけ。答えは言わない）。完成したら台・ヒント・全部もどすを隠し、完成の知らせを家のすぐ下に出す
+  // 次に押す所を一言で（選んだ部屋の名前だけ。答えは言わない）。完成したら台・ヒント・全部もどす（とことんの一言・降りるも）を隠し、完成の知らせを家のすぐ下に出す
   const g = $("guide"), sr = cur.sel && R.ROOMS[cur.sel];
   g.textContent = cur.done || !sr ? "" : cur.at[cur.sel] == null ? `${sr[1]} ${sr[0]}を置くますを押す` : `${sr[1]} ${sr[0]}：動かす先のますを押す（もう一度で台へ）`;
   g.hidden = !g.textContent;
-  for (const id of ["tray", "ctl", "ctl2"]) $(id).hidden = cur.done;
+  for (const id of ["tray", "ctl", "ctl2", "enote", "quit"]) if ($(id)) $(id).hidden = cur.done;
 }
 function tapCell(c) {
   if (cur.done) return;

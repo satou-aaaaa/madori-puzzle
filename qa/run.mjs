@@ -202,8 +202,11 @@ try {
   // 4. スマホ幅：はみ出さない・押せる所は44px以上
   for (const [w, hh] of [[320, 640], [390, 844]]) { // はじめての人：遊び方を閉じたら、今日の3軒のボタンが1画面目にあり、上級のボタンは1行
     const ph = await newPage(w, hh); await ph.click("#howto-ok");
-    const m = await ph.evaluate(() => ({ d: document.getElementById("go-d").getBoundingClientRect().bottom, hh: document.getElementById("go-h").getBoundingClientRect().height, ph: document.getElementById("go-p").getBoundingClientRect().height, sw: document.documentElement.scrollWidth }));
-    check(`${w}×${hh}：今日の3軒のボタンが1画面目に入り、上級・練習のボタンは1行（はみ出しなし）`, m.d <= hh && m.hh <= 60 && m.ph <= 52 && m.sw <= w, `下端${Math.round(m.d)} 上級${Math.round(m.hh)}px 練習${Math.round(m.ph)}px`);
+    const m = await ph.evaluate(() => {
+      const lines = (id) => { const el = document.getElementById(id), w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT); let n = 0, t; while ((t = w.nextNode())) { if (!t.textContent.trim()) continue; const r = document.createRange(); r.selectNodeContents(t); n = Math.max(n, new Set([...r.getClientRects()].filter((x) => x.width > 0).map((x) => Math.round(x.top))).size); } return n; };
+      return { d: document.getElementById("go-d").getBoundingClientRect().bottom, hh: document.getElementById("go-h").getBoundingClientRect().height, ph: document.getElementById("go-p").getBoundingClientRect().height, hl: lines("go-h"), pl: lines("go-p"), sw: document.documentElement.scrollWidth };
+    });
+    check(`${w}×${hh}：今日の3軒のボタンが1画面目に入り、上級・練習のボタンの字は1行（はみ出しなし）`, m.d <= hh && m.hh <= 60 && m.ph <= 52 && m.hl === 1 && m.pl === 1 && m.sw <= w, `下端${Math.round(m.d)} 上級${Math.round(m.hh)}px・${m.hl}行 練習${Math.round(m.ph)}px・${m.pl}行`);
     await ph.close(); }
   for (const w of [320, 390]) {
     const p3 = await newPage(w, 700); const fb2 = await p3.evaluate(() => { const a = document.querySelector("#howto #fb2"); return a ? a.getBoundingClientRect().height : 0; }); check(`幅${w}px：遊び方の「感想を送る」も高さ44px以上`, fb2 >= 44, `${fb2}px`); await p3.click("#howto-ok");
@@ -424,7 +427,11 @@ try {
     check("練習：同じ種類を300回続けても同じ家は出ない（まだ遊んでいない家を先に）", await pe.evaluate(() => { const g = window.__md; for (const sz of [0, 1, 2, 3]) { const recent = {}, seen = new Set(); for (let n = 0; n < 300; n++) { const it = g.freshOrder(g.poolOf(sz), recent)[0]; const k = g.keyOf(it); if (seen.has(k)) return false; seen.add(k); recent[k] = n + 1; } } return true; }));
     check("ホームに「とことん」の大きなボタン", (await pe.locator("#go-e.main").count()) === 1);
     await pe.click("#go-e");
-    for (let j = 0; j < 3; j++) { await solveNow(pe); await pe.click("#next"); }
+    await solveNow(pe);
+    { const v = await pe.evaluate(() => ({ hid: ["tray", "ctl", "ctl2", "guide", "enote", "quit"].every((id) => { const e = document.getElementById(id); return e && e.hidden && !e.offsetHeight; }), gap: document.querySelector(".verdict").getBoundingClientRect().top - document.getElementById("pl").getBoundingClientRect().bottom }));
+      check("とことんでも完成したら台・ヒント・全部もどす・とことんの一言・「ここで降りる」を隠し、完成の知らせを家のすぐ下に出す", v.hid && v.gap >= 0 && v.gap <= 40, `間 ${Math.round(v.gap)}px`); }
+    await pe.click("#next");
+    for (let j = 0; j < 2; j++) { await solveNow(pe); await pe.click("#next"); }
     check("とことんは何軒目かを出し、🎫・回数の残りは出さない", (await pe.textContent("header")).includes("4軒目") && !(await pe.content()).includes("🎫") && (await pe.evaluate(() => window.__md.load().runs.e.life)) === undefined);
     check("完成した家は recent に残る", await pe.evaluate(() => Object.keys(window.__md.load().recent).length === 3));
     await pe.click("#hint");
