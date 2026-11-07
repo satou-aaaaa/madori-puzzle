@@ -117,6 +117,7 @@ button.sub:disabled{opacity:.4;cursor:default}
 .legend .lg3{background:var(--grid)}.legend .lg2{background:#a9c6d8}html.a11y-cvd .legend .lg3{background:#0072B2}html.a11y-cvd .legend .lg2{background:#bcdcf0}
 .who{display:flex;align-items:center;gap:10px;font-size:14px}
 .who b{font-size:26px}
+.guide{margin:0;text-align:center;font-size:14px;font-weight:700;color:var(--grid)}
 .status{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px;color:var(--ink2);min-height:22px}
 .verdict{background:var(--paper);border:2px solid var(--grid);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px;box-shadow:0 6px 0 #28313a1c;animation:up .35s ease-out}
 @keyframes up{from{transform:translateY(16px);opacity:0}to{transform:none;opacity:1}}
@@ -488,9 +489,9 @@ function home() {
     <p class="lead" data-a11y-say>住む人の希望を、全部かなえる間取りに。<br>答えは1つ。だれでも同じ1日3軒。</p>
     ${done ? `<div class="share">今日の結果　${done.h.map(sq).join("")}</div>` : ""}
     <button class="main" id="go-d">${done ? "今日の結果を見る" : rd ? `続きから（${rd.res.length + 1}軒目）` : `今日の3軒を設計する <small>#${dayNo(k)}</small>`}</button>
-    <button class="main alt" id="go-h">${hdone ? "上級の結果を見る" : rh ? "上級の続きから" : "上級：希望の多い2軒（✓が出ない・ヒントなし）"}</button>
+    <button class="main alt" id="go-h">${hdone ? "上級の結果を見る" : rh ? "上級の続きから" : "上級：希望の多い2軒 <small>ヒントなし</small>"}</button>
     ${(() => { const re = s.runs.e || null; return `<button class="main alt" id="go-e">${re ? `とことんの続きから（${re.res.length + 1}軒目）` : "とことん：何軒続けて建てる？"}${s.ebest ? ` <small>自己ベスト ${s.ebest}軒</small>` : ""}</button>`; })()}
-    <div class="row"><button class="sub" id="go-p">練習（何度でも）</button><button class="sub" id="go-dex">建てた家 ${s.homes}軒</button></div>
+    <div class="row"><button class="sub" id="go-p">何度でも練習</button><button class="sub" id="go-dex">建てた家 ${s.homes}軒</button></div>
     <div class="row"><button class="sub" id="go-cal" aria-label="カレンダー${late.length ? `（あとから遊べる日 ${late.length}）` : ""}">カレンダー${late.length ? ` <small class="badge">▶${late.length}</small>` : ""}</button><button class="sub" id="go-ach">実績 ${ag}/${ACH.length}</button></div>
     <div class="stats"><div><b>${streak(s.days)}</b><small>連続の日</small></div><div><b>${Object.keys(s.days).length}</b><small>遊んだ日</small></div><div><b>${s.homes}</b><small>建てた家</small></div></div>
     <p class="rank">称号：${rankOf(s.homes)}${nr ? `（あと${nr[0] - s.homes}軒で${nr[1]}）` : ""}</p>
@@ -502,7 +503,7 @@ function home() {
   $("go-dex").onclick = dex;
   $("go-cal").onclick = () => cal();
   $("go-ach").onclick = achView;
-  bindFooter();
+  bindFooter(); window.scrollTo(0, 0);
   if (!s.tut) openHow();
 }
 function practiceMenu() {
@@ -511,7 +512,7 @@ function practiceMenu() {
     <div class="lv">${[...R.SIZES, R.HARD].map((S, i) => `<button class="sub" data-s="${i}" style="min-height:64px">${S.name}<br><small>${S.w}×${S.h}・${S.rooms.length}部屋</small></button>`).join("")}</div>${footer()}`;
   $("back").onclick = home;
   document.querySelectorAll(".lv button").forEach((b) => (b.onclick = () => startRun("p", +b.dataset.s)));
-  bindFooter();
+  bindFooter(); window.scrollTo(0, 0);
 }
 function startRun(mode, opt) {
   const k = todayKey();
@@ -559,9 +560,10 @@ function play() {
     <div class="who"><b aria-hidden="true">${h.who}</b><span data-a11y-say>住む人の希望（${h.q.length}つ）${hard ? "<br><small style='color:var(--ink2)'>上級：かなったかどうかは完成まで出ません</small>" : ""}</span></div>
     <ul class="wish" id="wish" data-a11y-say></ul>
     <div id="pl"></div>
+    <p class="guide" id="guide"></p>
     <div class="tray" id="tray"></div>
-    <div class="status"><span id="left"></span>${hard ? "<span>ヒントなし</span>" : `<button class="sub" id="hint" style="min-height:44px;padding:0 14px">ヒント</button>`}</div>
-    <div class="row"><button class="sub" id="clear">全部もどす</button></div>
+    <div class="status" id="ctl"><span id="left"></span>${hard ? "<span>ヒントなし</span>" : `<button class="sub" id="hint" style="min-height:44px;padding:0 14px">ヒント</button>`}</div>
+    <div class="row" id="ctl2"><button class="sub" id="clear">全部もどす</button></div>
     ${run.mode === "e" ? `<p class="note">ヒントを使っても終わりません。好きなところで降りられます。</p><button class="sub" id="quit" style="width:100%">ここで降りる（${i}軒で終える）</button>` : ""}
     <div id="after"></div>`;
   $("back").onclick = home;
@@ -596,6 +598,11 @@ function paint() {
   $("left").textContent = cur.done ? "" : `のこり ${left.length}部屋${cur.hints ? `・ヒント ${cur.hints}` : ""}`;
   $("clear").disabled = cur.done || S.rooms.every((r) => cur.at[r] == null || !movable(r));
   if ($("hint")) $("hint").disabled = cur.done || cur.hints >= 2;
+  // 次に押す所を一言で（選んだ部屋の名前だけ。答えは言わない）。完成したら台・ヒント・全部もどすを隠し、完成の知らせを家のすぐ下に出す
+  const g = $("guide"), sr = cur.sel && R.ROOMS[cur.sel];
+  g.textContent = cur.done || !sr ? "" : cur.at[cur.sel] == null ? `${sr[1]} ${sr[0]}を置くますを押す` : `${sr[1]} ${sr[0]}：動かす先のますを押す（もう一度で台へ）`;
+  g.hidden = !g.textContent;
+  for (const id of ["tray", "ctl", "ctl2"]) $(id).hidden = cur.done;
 }
 function tapCell(c) {
   if (cur.done) return;
@@ -729,6 +736,7 @@ function result(mode, k, first, prec, newAch = []) {
     $("copy").onclick = () => copy(withUrl);
     $("share").onclick = () => { if (navigator.share) navigator.share({ text: withUrl }).catch(() => {}); else copy(withUrl); };
   }
+  window.scrollTo(0, 0); // 結果は上（見出し）から見せる（完成の画面の下までスクロールしたまま開かない）
 }
 
 function dex() {
@@ -739,7 +747,7 @@ function dex() {
     <div class="dex">${Object.keys(R.ROOMS).map((r) => `<div><b>${R.ROOMS[r][1]}</b>${R.ROOMS[r][0]}<span>${s.rooms[r] || 0}回</span></div>`).join("")}</div>
     ${footer()}`;
   $("back").onclick = home;
-  bindFooter();
+  bindFooter(); window.scrollTo(0, 0);
 }
 
 function achView() {
