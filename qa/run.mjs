@@ -128,11 +128,15 @@ try {
   await page.click("#go-d");
   let c = await curM(page);
   check("1軒目は平屋（3×2）・希望が出て、はじめから台の先頭の部屋が選ばれている", (await page.locator("#pl .cell").count()) === 6 && (await page.locator("#wish li").count()) >= 3 && c.sel === c.rooms[0]);
+  { const g = await page.textContent("#guide"), nm = await page.textContent(`.rm[data-r="${c.rooms[0]}"]`);
+    check("遊ぶ画面に、次に押す所を一言で出す（選んだ部屋の名前と「置くますを押す」）", g.trim() === `${nm.trim()}を置くますを押す` && await page.isVisible("#guide"), g); }
   await page.click(`#pl .cell[data-c="0"]`);
   let n1 = await curM(page);
   check("ますを押すと選んだ部屋が置かれ、次の部屋が選ばれる", n1.at[c.rooms[0]] === 0 && n1.sel === c.rooms[1]);
   await page.click(`#pl .cell[data-c="1"]`);
-  await page.click(`#pl .cell[data-c="0"]`); await page.click(`#pl .cell[data-c="1"]`);
+  await page.click(`#pl .cell[data-c="0"]`);
+  check("置いた部屋を選ぶと、一言が「動かす先のますを押す」に変わる", (await page.textContent("#guide")).includes("動かす先のますを押す"));
+  await page.click(`#pl .cell[data-c="1"]`);
   n1 = await curM(page);
   check("置いた部屋を押して別の部屋のますを押すと、入れかわる", n1.at[c.rooms[0]] === 1 && n1.at[c.rooms[1]] === 0);
   await page.click(`#pl .cell[data-c="1"]`); await page.click(`#pl .cell[data-c="1"]`);
@@ -154,6 +158,8 @@ try {
   await solveNow(page);
   { const marks = await page.locator("#wish li").evaluateAll((lis) => lis.map((li) => [li.className, li.querySelector("i").textContent])); check("全部かなえたら、希望の印はすべて ✓", marks.length > 0 && marks.every(([c, m]) => c === "ok" && m === "✓")); }
   check("希望を全部かなえると完成になり、★2（ヒント1）が出る", (await curM(page)).done && (await page.locator(".verdict .stars .off").textContent()).length === 1 && (await page.locator("#wish li.ok").count()) === (await page.locator("#wish li").count()));
+  { const v = await page.evaluate(() => ({ hid: ["tray", "ctl", "ctl2", "guide"].every((id) => document.getElementById(id).hidden && !document.getElementById(id).offsetHeight), gap: document.querySelector(".verdict").getBoundingClientRect().top - document.getElementById("pl").getBoundingClientRect().bottom }));
+    check("完成したら台・ヒント・全部もどす・一言を隠し、完成の知らせを家のすぐ下に出す", v.hid && v.gap >= 0 && v.gap <= 40, `間 ${Math.round(v.gap)}px`); }
   await page.click("#next");
   c = await curM(page);
   check("2軒目は二世帯（3×3）で、玄関は南の真ん中に決まっていて動かない", (await page.locator("#pl .cell").count()) === 9 && c.at.gen === 7 && (await page.locator("#pl .cell.fix").count()) === 1);
@@ -170,6 +176,7 @@ try {
   check("3軒で結果・シェアの文は番号と色だけ", /間取りパズル #\d+/.test(share) && /🟨🏠🏠/.test(share));
   check("X・LINE は押したときに開くリンクだけ", /^https:\/\/twitter\.com\/intent\/tweet\?text=/.test(await page.getAttribute("#toX", "href")) && /^https:\/\/line\.me\/R\/share\?text=/.test(await page.getAttribute("#toLine", "href")));
   check("結果に3軒の間取りが出る", (await page.locator(".minis .plan").count()) === 3);
+  check("結果の画面は上（見出し）から開く（完成の画面の下までスクロールしたまま開かない）", (await page.evaluate(() => scrollY)) === 0 && await page.isVisible(".big"));
   check("ヒントを使った日は Ko-fi のひとことを出さない", (await page.locator(".kofi").count()) === 0);
   await page.click("#back");
   check("ホームで連続1日・今日の結果を見るに変わる・建てた家3", (await page.textContent(".stats")).includes("1連続の日") && (await page.textContent(".stats")).includes("3建てた家") && (await page.textContent("#go-d")).includes("結果"));
@@ -193,6 +200,14 @@ try {
   await page.close();
 
   // 4. スマホ幅：はみ出さない・押せる所は44px以上
+  for (const [w, hh] of [[320, 640], [390, 844]]) { // はじめての人：遊び方を閉じたら、今日の3軒のボタンが1画面目にあり、上級のボタンは1行
+    const ph = await newPage(w, hh); await ph.click("#howto-ok");
+    const m = await ph.evaluate(() => {
+      const lines = (id) => { const el = document.getElementById(id), w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT); let n = 0, t; while ((t = w.nextNode())) { if (!t.textContent.trim()) continue; const r = document.createRange(); r.selectNodeContents(t); n = Math.max(n, new Set([...r.getClientRects()].filter((x) => x.width > 0).map((x) => Math.round(x.top))).size); } return n; };
+      return { d: document.getElementById("go-d").getBoundingClientRect().bottom, hh: document.getElementById("go-h").getBoundingClientRect().height, ph: document.getElementById("go-p").getBoundingClientRect().height, hl: lines("go-h"), pl: lines("go-p"), sw: document.documentElement.scrollWidth };
+    });
+    check(`${w}×${hh}：今日の3軒のボタンが1画面目に入り、上級・練習のボタンの字は1行（はみ出しなし）`, m.d <= hh && m.hh <= 60 && m.ph <= 52 && m.hl === 1 && m.pl === 1 && m.sw <= w, `下端${Math.round(m.d)} 上級${Math.round(m.hh)}px・${m.hl}行 練習${Math.round(m.ph)}px・${m.pl}行`);
+    await ph.close(); }
   for (const w of [320, 390]) {
     const p3 = await newPage(w, 700); const fb2 = await p3.evaluate(() => { const a = document.querySelector("#howto #fb2"); return a ? a.getBoundingClientRect().height : 0; }); check(`幅${w}px：遊び方の「感想を送る」も高さ44px以上`, fb2 >= 44, `${fb2}px`); await p3.click("#howto-ok");
     const homeOk = await p3.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
@@ -412,7 +427,11 @@ try {
     check("練習：同じ種類を300回続けても同じ家は出ない（まだ遊んでいない家を先に）", await pe.evaluate(() => { const g = window.__md; for (const sz of [0, 1, 2, 3]) { const recent = {}, seen = new Set(); for (let n = 0; n < 300; n++) { const it = g.freshOrder(g.poolOf(sz), recent)[0]; const k = g.keyOf(it); if (seen.has(k)) return false; seen.add(k); recent[k] = n + 1; } } return true; }));
     check("ホームに「とことん」の大きなボタン", (await pe.locator("#go-e.main").count()) === 1);
     await pe.click("#go-e");
-    for (let j = 0; j < 3; j++) { await solveNow(pe); await pe.click("#next"); }
+    await solveNow(pe);
+    { const v = await pe.evaluate(() => ({ hid: ["tray", "ctl", "ctl2", "guide", "enote", "quit"].every((id) => { const e = document.getElementById(id); return e && e.hidden && !e.offsetHeight; }), gap: document.querySelector(".verdict").getBoundingClientRect().top - document.getElementById("pl").getBoundingClientRect().bottom }));
+      check("とことんでも完成したら台・ヒント・全部もどす・とことんの一言・「ここで降りる」を隠し、完成の知らせを家のすぐ下に出す", v.hid && v.gap >= 0 && v.gap <= 40, `間 ${Math.round(v.gap)}px`); }
+    await pe.click("#next");
+    for (let j = 0; j < 2; j++) { await solveNow(pe); await pe.click("#next"); }
     check("とことんは何軒目かを出し、🎫・回数の残りは出さない", (await pe.textContent("header")).includes("4軒目") && !(await pe.content()).includes("🎫") && (await pe.evaluate(() => window.__md.load().runs.e.life)) === undefined);
     check("完成した家は recent に残る", await pe.evaluate(() => Object.keys(window.__md.load().recent).length === 3));
     await pe.click("#hint");
