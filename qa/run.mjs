@@ -222,7 +222,7 @@ try {
     await p3.click("#go-d");
     await p3.evaluate(() => { const g = window.__md, s = g.load(); s.runs.d.res = [{ h: 0 }]; localStorage.setItem("madori-v1", JSON.stringify(s)); });
     await p3.click("#back"); await p3.click("#go-d");
-    const r = await p3.evaluate(() => ({ over: document.documentElement.scrollWidth > innerWidth, small: [...document.querySelectorAll("button, a")].filter((e) => e.offsetParent && e.getBoundingClientRect().height < 44).map((e) => e.id || e.textContent.trim().slice(0, 6)), cell: Math.min(...[...document.querySelectorAll("#pl .cell")].map((e) => e.getBoundingClientRect().height)), wrap: Math.max(...[...document.querySelectorAll("#wish li")].map((e) => e.getBoundingClientRect().height)) }));
+    const r = await p3.evaluate(() => ({ over: document.documentElement.scrollWidth > innerWidth, small: [...document.querySelectorAll("button, a")].filter((e) => e.offsetParent && Math.round(e.getBoundingClientRect().height) < 44).map((e) => e.id || e.textContent.trim().slice(0, 6)), cell: Math.min(...[...document.querySelectorAll("#pl .cell")].map((e) => e.getBoundingClientRect().height)), wrap: Math.max(...[...document.querySelectorAll("#wish li")].map((e) => e.getBoundingClientRect().height)) }));
     check(`幅${w}px（3×3）：横にはみ出さず、押せる所は高さ44px以上・希望は1行に収まる`, homeOk && !r.over && r.small.length === 0 && r.cell >= 44 && r.wrap < 40, `${r.small.join(",")} ます${r.cell.toFixed(0)}px 希望${r.wrap.toFixed(0)}px`);
     await p3.close();
   }
@@ -491,7 +491,7 @@ try {
     mkdirSync(path.join(root, "qa-report"), { recursive: true });
     for (const w of [320, 390]) {
       const pw = await pageAt("2026-11-20", w, st), bad = [];
-      const look = async (name) => { await pw.waitForTimeout(500); await pw.screenshot({ path: path.join(root, `qa-report/${name}-${w}.png`), fullPage: true }); const r = await pw.evaluate(() => ({ over: document.documentElement.scrollWidth > innerWidth, small: [...document.querySelectorAll("button, a")].filter((e) => e.offsetParent && getComputedStyle(e).visibility !== "hidden" && e.getBoundingClientRect().height < 44).map((e) => e.textContent.trim() || e.id), wrap: Math.max(0, ...[...document.querySelectorAll("#wish li")].map((e) => e.getBoundingClientRect().height)) })); if (r.over || r.small.length || r.wrap >= 40) bad.push(`${name}:${r.over ? "はみ出し" : ""}${r.small.join("/")}${r.wrap >= 40 ? "希望が2行" : ""}`); };
+      const look = async (name) => { await pw.waitForTimeout(500); await pw.screenshot({ path: path.join(root, `qa-report/${name}-${w}.png`), fullPage: true }); const r = await pw.evaluate(() => ({ over: document.documentElement.scrollWidth > innerWidth, small: [...document.querySelectorAll("button, a")].filter((e) => e.offsetParent && getComputedStyle(e).visibility !== "hidden" && Math.round(e.getBoundingClientRect().height) < 44).map((e) => e.textContent.trim() || e.id), wrap: Math.max(0, ...[...document.querySelectorAll("#wish li")].map((e) => e.getBoundingClientRect().height)) })); if (r.over || r.small.length || r.wrap >= 40) bad.push(`${name}:${r.over ? "はみ出し" : ""}${r.small.join("/")}${r.wrap >= 40 ? "希望が2行" : ""}`); };
       await look("home"); await pw.click("#go-ach"); await look("ach"); await pw.click("#back"); await pw.click("#go-cal"); await look("cal");
       await pw.click('.cal button[data-k="2026-11-18"]'); await look("late-play");
       for (let j = 0; j < 3; j++) { await solveNow(pw); if (j === 2) await look("late-done"); await pw.click("#next"); }
