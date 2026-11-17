@@ -434,8 +434,15 @@ try {
     check("ホームに「とことん」の大きなボタン", (await pe.locator("#go-e.main").count()) === 1);
     await pe.click("#go-e");
     await solveNow(pe);
-    { const v = await pe.evaluate(() => ({ hid: ["tray", "ctl", "ctl2", "guide", "enote", "quit"].every((id) => { const e = document.getElementById(id); return e && e.hidden && !e.offsetHeight; }), gap: document.querySelector(".verdict").getBoundingClientRect().top - document.getElementById("pl").getBoundingClientRect().bottom }));
-      check("とことんでも完成したら台・ヒント・全部もどす・とことんの一言・「ここで降りる」を隠し、完成の知らせを家のすぐ下に出す", v.hid && v.gap >= 0 && v.gap <= 40, `間 ${Math.round(v.gap)}px`); }
+    { const v = await pe.evaluate(() => { const q = document.getElementById("quit"); return { hid: ["tray", "ctl", "ctl2", "guide", "enote"].every((id) => { const e = document.getElementById(id); return e && e.hidden && !e.offsetHeight; }), quit: !!q && !q.hidden && q.offsetHeight > 0 ? q.textContent : "", gap: document.querySelector(".verdict").getBoundingClientRect().top - document.getElementById("pl").getBoundingClientRect().bottom }; });
+      check("とことんでも完成したら台・ヒント・全部もどす・とことんの一言を隠し、完成の知らせを家のすぐ下に出す・「ここで降りる」は残り、完成した1軒を数に入れる（2026-11-17）", v.hid && v.gap >= 0 && v.gap <= 40 && v.quit.includes("1軒で終える"), `間 ${Math.round(v.gap)}px ${v.quit}`); }
+    { // 完成した直後（次へを押す前）に「ここで降りる」を押すと、完成した1軒が数に入る（2026-11-17）
+      const pz = await newPage();
+      if (await pz.locator("#howto[open]").count()) await pz.click("#howto-ok");
+      await pz.click("#go-e"); await solveNow(pz); await pz.click("#quit"); await pz.waitForTimeout(150);
+      check("とことんで完成した直後でも「ここで降りる」で終わり、完成した1軒が数に入る", await pz.locator("#eres").count() === 1 && (await pz.textContent("#eres")).includes("1軒") && (await pz.evaluate(() => window.__md.load().ebest)) === 1);
+      await pz.close();
+    }
     await pe.click("#next");
     for (let j = 0; j < 2; j++) { await solveNow(pe); await pe.click("#next"); }
     check("とことんは何軒目かを出し、🎫・回数の残りは出さない", (await pe.textContent("header")).includes("4軒目") && !(await pe.content()).includes("🎫") && (await pe.evaluate(() => window.__md.load().runs.e.life)) === undefined);
@@ -554,6 +561,31 @@ try {
   try { // 引き継ぎコード（別の端末へ記録を移す。shared-workflows template/qa/transfer-check.mjs）
     await checkTransfer({ browser, url, game: "madori-puzzle", sample: { "madori-v1": JSON.stringify({ v: 1, tut: true, recent: { "0:3": 1762400000000, "2:41": 1762400100000, "3:700": 1762400200000 } }) }, check, open: async (p) => { await p.click("#howto-ok", { timeout: 1500 }).catch(() => {}); } });
   } catch (e) { check("引き継ぎコード", false, e.message.split("\n")[0]); }
+  // 保存できないとき：帯 #savewarn でちょうど1つ知らせ、2秒たっても残り、保存できるようになったら消える（2026-11-17。黙って記録が消えないように）
+  {
+    const cw = await browser.newContext({ viewport: { width: 390, height: 800 } });
+    await cw.addInitScript(() => { window.__origSetItem = Storage.prototype.setItem; Storage.prototype.setItem = function () { throw new Error("full"); }; });
+    const pw = await cw.newPage(); await pw.goto(url); await pw.waitForTimeout(300);
+    const nW = () => pw.evaluate(() => document.querySelectorAll("#savewarn").length);
+    if (!(await pw.isVisible("#howto-ok"))) await pw.click("#f-how");
+    await pw.click("#howto-ok"); await pw.waitForTimeout(100);
+    const n1 = await nW(), txt = await pw.evaluate(() => (document.getElementById("savewarn") || {}).textContent || "");
+    await pw.waitForTimeout(2000); const n2 = await nW();
+    await pw.evaluate(() => { Storage.prototype.setItem = window.__origSetItem; });
+    await pw.click("#f-how"); await pw.click("#howto-ok"); await pw.waitForTimeout(100); const n3 = await nW();
+    check("保存できないブラウザで遊ぶと、帯（#savewarn）でちょうど1つ知らせ、2秒たっても残る・保存できるようになったら消える", n1 === 1 && n2 === 1 && txt.includes("保存できませんでした") && n3 === 0, JSON.stringify([n1, n2, n3, txt]));
+    await cw.close();
+  }
+  // 知らせ（.toast）が出ているあいだも、その下のボタンを押せる（2026-11-17。知らせがボタンをふさがないように）
+  {
+    const ct = await browser.newContext({ viewport: { width: 390, height: 800 } });
+    const pt = await ct.newPage(); await pt.goto(url); await pt.waitForTimeout(300);
+    const at = await pt.evaluate(() => { const d = document.getElementById("howto"); if (d && d.open && d.close) d.close(); toast("おしらせの検査"); const t = [...document.querySelectorAll(".toast")].pop(), r = t.getBoundingClientRect(), b = document.createElement("button"); b.id = "qa-under"; b.textContent = "下"; b.style.cssText = "position:fixed;left:0;bottom:0;width:100%;height:" + (innerHeight - r.top + 10) + "px;z-index:1"; b.onclick = () => { b.dataset.hit = "1"; }; document.body.appendChild(b); return { x: r.left + r.width / 2, y: r.top + r.height / 2, pe: getComputedStyle(t).pointerEvents }; });
+    await pt.mouse.click(at.x, at.y); await pt.waitForTimeout(50);
+    const hit = await pt.evaluate(() => { const b = document.getElementById("qa-under"), on = !!document.querySelector(".toast"), h = b.dataset.hit === "1"; b.remove(); return on && h; });
+    check("知らせ（.toast）が出ているあいだも、その下のボタンを押せる（pointer-events:none）", at.pe === "none" && hit, JSON.stringify(at));
+    await ct.close();
+  }
   await browser.close();
 }
 check("画面のエラーが無い", errors.length === 0, errors.slice(0, 3).join(" | "));

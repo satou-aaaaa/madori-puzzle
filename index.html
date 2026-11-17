@@ -155,7 +155,7 @@ dialog h2{margin:0 0 10px;letter-spacing:.06em}
 dialog ol{padding-left:1.3em;margin:0 0 12px;line-height:1.8}
 dialog p{margin:0 0 10px;font-size:14px;line-height:1.7;color:var(--ink2)}
 dialog a{color:var(--red2);min-height:44px;display:inline-flex;align-items:center}
-.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:12px;font-weight:800;z-index:9;box-shadow:0 6px 20px #0005;max-width:90%;text-align:center}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:12px;font-weight:800;z-index:9;box-shadow:0 6px 20px #0005;max-width:90%;text-align:center;pointer-events:none;}
 footer{margin-top:auto;text-align:center;font-size:12px;color:var(--ink2);display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
 footer a{color:var(--ink2);min-height:44px;display:inline-flex;align-items:center}
 [hidden]{display:none!important}
@@ -409,7 +409,8 @@ function bank(s, r) { const b = doneOf(r) ? bookOf(s, r.mode) : null; if (!b || 
 function trimRecent(s) { const r = s.recent || {}, ks = Object.keys(r); if (ks.length > RECENT) for (const x of ks.sort((p, q) => r[p] - r[q] || (p < q ? -1 : 1)).slice(0, ks.length - RECENT)) delete r[x]; return s; } // 最近の家は新しい RECENT 軒だけ（タブを合わせた後も。2026-11-06 CodeRabbit）
 function load() { let a = null, b = null; try { b = JSON.parse(localStorage.getItem(KEY)); } catch (e) {} try { a = mem !== null ? JSON.parse(mem) : null; } catch (e) {} if (a && a.v !== 1) a = null; if (b && b.v !== 1) b = null; if (!a || !b) return trimRecent(Object.assign(fresh(), a || b || {})); a = Object.assign(fresh(), a); b = Object.assign(fresh(), b); const [n, o] = (a.t || 0) >= (b.t || 0) ? [a, b] : [b, a]; const s = Object.assign(fresh(), n); for (const k in o) { if (k === "runs" || k === "t") continue; const x = o[k], y = n[k]; if (x && y && typeof x === "object" && typeof y === "object") { s[k] = Object.assign({}, x, y); for (const q in x) if (typeof x[q] === "number" && typeof y[q] === "number") s[k][q] = Math.max(x[q], y[q]); } else if (typeof x === "number" && typeof y === "number") s[k] = Math.max(x, y); else if (x === true) s[k] = true; } const ra = a.runs || {}, rb = b.runs || {}, prog = (r) => (r.res ? r.res.length : 0) * 1000 + (r.cur && r.cur.at ? Object.keys(r.cur.at).length * 10 : 0) + (r.cur && r.cur.mv ? Math.min(r.cur.mv, 9) : 0), idOf = (r) => JSON.stringify([r.mode === "e" ? null : r.list || null, r.id || null]); s.runs = Object.assign({}, n.runs); for (const m of new Set([...Object.keys(ra), ...Object.keys(rb)])) { const x = ra[m], y = rb[m]; if (x === undefined || y === undefined) { if (x || y) s.runs[m] = x || y; continue; } if (!x || !y) { const r = x || y; if (!r || bank(s, r) || doneOf(r)) continue; const bd = bookOf(s, r.mode); if (bd && !bd[r.date]) s.runs[m] = r; continue; } if (x.date !== y.date) { const [w, l] = x.date > y.date ? [x, y] : [y, x]; bank(s, l); s.runs[m] = w; } else if (idOf(x) === idOf(y)) { const px = prog(x), py = prog(y); s.runs[m] = px > py ? x : py > px ? y : n.runs[m]; } } return trimRecent(s); }
 // 保存の前に読み直す（別のタブで進めた記録を消さない）
-function save(fn) { const s = load(); fn(s); s.t = Math.max(Date.now(), (s.t || 0) + 1); const j = JSON.stringify(s); try { localStorage.setItem(KEY, j); mem = null; } catch (e) { mem = j; } return s; }
+function saveWarn(on) { let b = document.getElementById("savewarn"); const l = document.getElementById("live"), W = "この端末に記録を保存できませんでした。ページを開き直すと、いまの記録が消えます"; if (!on) { if (b) { b.remove(); if (saveWarn.o) saveWarn.o.disconnect(); if (l && l.textContent.includes(W)) l.textContent = l.textContent.replace(W, "").replace(/^[。\s]+|[。\s]+$/g, ""); } return; } if (b) return; b = document.createElement("div"); b.id = "savewarn"; b.setAttribute("role", "status"); b.textContent = W; b.style.cssText = "position:sticky;top:0;z-index:9999;padding:8px 12px;background:#fff3cd;color:#000;font-size:15px;line-height:1.5;text-align:center;pointer-events:none;border-bottom:2px solid #8a6d00"; (document.body || document.documentElement).prepend(b); if (l) { l.textContent = W; if (window.MutationObserver) { saveWarn.o = new MutationObserver(() => { if (document.getElementById("savewarn") && l.textContent && !l.textContent.includes(W)) l.textContent += "。" + W; }); saveWarn.o.observe(l, { childList: true, characterData: true, subtree: true }); } } } // 帯は画面のいちばん上に場所を取り（ボタンに重ならない）、#live でも読み上げる。ほかの知らせで #live が書き換わっても、保存できないあいだは警告を後ろに付け直す。保存できたら帯と #live の警告を消す（黙って記録が消えないように・古い警告を読み上げないように）
+function save(fn) { const s = load(); fn(s); s.t = Math.max(Date.now(), (s.t || 0) + 1); const j = JSON.stringify(s); try { localStorage.setItem(KEY, j); mem = null; saveWarn(false); } catch (e) { mem = j; saveWarn(true); } return s; }
 const prevDay = (k) => new Date(Date.parse(k) - 864e5).toISOString().slice(0, 10);
 function streak(days) { let k = todayKey(), n = 0; if (!days[k]) k = prevDay(k); while (days[k]) { n++; k = prevDay(k); } return n; }
 const RANKS = [[0, "見習い"], [10, "設計の助手"], [40, "間取りの設計士"], [120, "人気の設計士"], [300, "間取りの名人"]];
@@ -568,12 +569,13 @@ function play() {
     <div class="tray" id="tray"></div>
     <div class="status" id="ctl"><span id="left"></span>${hard ? "<span>ヒントなし</span>" : `<button class="sub" id="hint" style="min-height:44px;padding:0 14px">ヒント</button>`}</div>
     <div class="row" id="ctl2"><button class="sub" id="clear">全部もどす</button></div>
-    ${run.mode === "e" ? `<p class="note" id="enote">ヒントを使っても終わりません。好きなところで降りられます。</p><button class="sub" id="quit" style="width:100%">ここで降りる（${i}軒で終える）</button>` : ""}
-    <div id="after"></div>`;
+    ${run.mode === "e" ? `<p class="note" id="enote">ヒントを使っても終わりません。好きなところで降りられます。</p>` : ""}
+    <div id="after"></div>
+    ${run.mode === "e" ? `<button class="sub" id="quit" style="width:100%">ここで降りる（${i}軒で終える）</button>` : ""}`;
   $("back").onclick = home;
   $("clear").onclick = clearAll;
   if ($("hint")) $("hint").onclick = hint;
-  if ($("quit")) $("quit").onclick = () => { if (cur && cur.done) return; finish(); };
+  if ($("quit")) $("quit").onclick = () => finish(); // 完成した直後でも降りられる（完成した家は保存ずみ。二度押しは runs.e が空になるので結果を二度作らない）
   paint();
   window.scrollTo(0, 0);
 }
@@ -602,11 +604,11 @@ function paint() {
   $("left").textContent = cur.done ? "" : `のこり ${left.length}部屋${cur.hints ? `・ヒント ${cur.hints}` : ""}`;
   $("clear").disabled = cur.done || S.rooms.every((r) => cur.at[r] == null || !movable(r));
   if ($("hint")) $("hint").disabled = cur.done || cur.hints >= 2;
-  // 次に押す所を一言で（選んだ部屋の名前だけ。答えは言わない）。完成したら台・ヒント・全部もどす（とことんの一言・降りるも）を隠し、完成の知らせを家のすぐ下に出す
+  // 次に押す所を一言で（選んだ部屋の名前だけ。答えは言わない）。完成したら台・ヒント・全部もどす（とことんの一言も）を隠し（「ここで降りる」は残す）、完成の知らせを家のすぐ下に出す
   const g = $("guide"), sr = cur.sel && R.ROOMS[cur.sel];
   g.textContent = cur.done || !sr ? "" : cur.at[cur.sel] == null ? `${sr[1]} ${sr[0]}を置くますを押す` : `${sr[1]} ${sr[0]}：動かす先のますを押す（もう一度で台へ）`;
   g.hidden = !g.textContent;
-  for (const id of ["tray", "ctl", "ctl2", "enote", "quit"]) if ($(id)) $(id).hidden = cur.done;
+  for (const id of ["tray", "ctl", "ctl2", "enote"]) if ($(id)) $(id).hidden = cur.done;
 }
 function tapCell(c) {
   if (cur.done) return;
@@ -650,6 +652,7 @@ function check() {
   const st = starsOf(cur.hints);
   paint(); say(`完成！星${st}つ。希望を${h.q.length}つ、全部かなえました`);
   const r = s.runs[MODE], fin = r && r.mode !== "e" && r.res.length >= r.list.length;
+  if ($("quit") && r) $("quit").textContent = `ここで降りる（${r.res.length}軒で終える）`; // 完成した分も数に入れる
   $("after").innerHTML = `<div class="verdict" role="status">
     <div class="hd">完成！ ${starStr(st)}</div>
     ${cur.mv === 0 && cur.hints === 0 ? `<span class="clean" id="clean">書き直しなし</span>` : ""}
