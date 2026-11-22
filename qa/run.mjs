@@ -12,7 +12,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const url = pathToFileURL(path.join(root, "index.html")).href;
 const results = [];
 const check = (name, ok, detail = "") => results.push({ name, ok: !!ok, detail });
-const firstClose = async (q) => { if (await q.locator("#howto[open]").count()) await q.click("#howto-ok"); if (await q.locator("#core-coach").count()) { await q.evaluate(() => Core.coach.leave()); await q.waitForTimeout(100); } }; // はじめての練習の吹き出しをやめてホームへ（sync-template の migrateFirstQa が足した）
+const firstClose = async (q) => { if (await q.locator("#howto[open]").count()) await q.click("#howto-ok"); if (await q.evaluate(() => !!(window.Core && Core.coach && Core.coach.active()))) { await q.evaluate(() => { Core.coach.leave(); scrollTo(0, 0); }); await q.waitForTimeout(100); } }; // はじめての練習の吹き出しをやめてホームへ（sync-template の migrateFirstQa が足した）
 const req = createRequire(import.meta.url), R = req(path.join(root, "rules.js")), D = req(path.join(root, "data.js"));
 
 // 1. 問題（ブラウザを使わない）。全部の家を確かめ直す
@@ -216,7 +216,7 @@ try {
     check(`${w}×${hh}：今日の3軒のボタンが1画面目に入り、上級・練習のボタンの字は1行（はみ出しなし）`, m.d <= hh && m.hh <= 60 && m.ph <= 52 && m.hl === 1 && m.pl === 1 && m.sw <= w, `下端${Math.round(m.d)} 上級${Math.round(m.hh)}px・${m.hl}行 練習${Math.round(m.ph)}px・${m.pl}行`);
     await ph.close(); }
   for (const w of [320, 390]) {
-    const p3 = await newPage(w, 700); await firstClose(p3).then(() => p3.click("#f-how")); const fb2 = await p3.evaluate(() => { const a = document.querySelector("#howto #fb2"); return a ? a.getBoundingClientRect().height : 0; }); check(`幅${w}px：遊び方の「感想を送る」も高さ44px以上`, fb2 >= 44, `${fb2}px`); await firstClose(p3);
+    const p3 = await newPage(w, 700); await firstClose(p3).then(() => p3.evaluate(() => openHow())); const fb2 = await p3.evaluate(() => { const a = document.querySelector("#howto #fb2"); return a ? a.getBoundingClientRect().height : 0; }); check(`幅${w}px：遊び方の「感想を送る」も高さ44px以上`, fb2 >= 44, `${fb2}px`); await firstClose(p3);
     const homeOk = await p3.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
     const heroOut = await p3.evaluate(() => { const pl = document.querySelector(".hero .plan").getBoundingClientRect(); return [...document.querySelectorAll(".hero .cell")].filter((c) => { const r = c.getBoundingClientRect(); return r.right > pl.right + 0.5 || r.left < pl.left - 0.5; }).length; });
     check(`幅${w}px：ホームの見本の家の部屋が、方眼の紙からはみ出さない`, heroOut === 0, `${heroOut}部屋`);
@@ -483,6 +483,7 @@ try {
     await pe.close(); }
   { // はじめて開いた日から、上級・とことん・練習を全部遊べる（🔒で開くモードを入れない。2026-11-06 satou さん）
     const pf = await pageAt("2026-11-20", 390, base());
+    await firstClose(pf);
     check("はじめて開いた日から、ホームに上級・とことん・練習のボタンがあり押せる", (await pf.locator("#go-h").count()) === 1 && (await pf.locator("#go-e").count()) === 1 && (await pf.locator("#go-p").count()) === 1 && !(await pf.locator("#go-h").isDisabled()) && !(await pf.content()).includes("すると開く"));
     await pf.click("#go-h");
     check("今日の3軒の前でも上級を始められる", (await pf.evaluate(() => window.__md.mode())) === "h" && (await pf.locator("#pl .cell").count()) === 9);
@@ -568,12 +569,12 @@ try {
     await cw.addInitScript(() => { window.__origSetItem = Storage.prototype.setItem; Storage.prototype.setItem = function () { throw new Error("full"); }; });
     const pw = await cw.newPage(); await pw.goto(url); await pw.waitForTimeout(300);
     const nW = () => pw.evaluate(() => document.querySelectorAll("#savewarn").length);
-    if (!(await pw.isVisible("#howto-ok"))) await firstClose(pw).then(() => pw.click("#f-how"));
+    if (!(await pw.isVisible("#howto-ok"))) await firstClose(pw).then(() => pw.evaluate(() => openHow()));
     await firstClose(pw); await pw.waitForTimeout(100);
     const n1 = await nW(), txt = await pw.evaluate(() => (document.getElementById("savewarn") || {}).textContent || "");
     await pw.waitForTimeout(2000); const n2 = await nW();
     await pw.evaluate(() => { Storage.prototype.setItem = window.__origSetItem; });
-    await firstClose(pw).then(() => pw.click("#f-how")); await firstClose(pw); await pw.waitForTimeout(100); const n3 = await nW();
+    await firstClose(pw).then(() => pw.evaluate(() => openHow())); await firstClose(pw); await pw.waitForTimeout(100); const n3 = await nW();
     check("保存できないブラウザで遊ぶと、帯（#savewarn）でちょうど1つ知らせ、2秒たっても残る・保存できるようになったら消える", n1 === 1 && n2 === 1 && txt.includes("保存できませんでした") && n3 === 0, JSON.stringify([n1, n2, n3, txt]));
     await cw.close();
   }
