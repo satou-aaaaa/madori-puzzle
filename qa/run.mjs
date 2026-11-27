@@ -50,6 +50,8 @@ const parse = (raw, S) => { const [qs, sol] = raw.split("|"); return { q: qs.spl
 }
 
 const html = readFileSync(path.join(root, "index.html"), "utf8");
+// ひな形の写し（<!-- 名前:begin〜end -->）はゲームの言葉ではないので外し、Core.kofi・Core.KOFI は写す前の形にもどして見る（shared-workflows の sync-template が足した）
+const gameOwn = (t) => t.replace(/<!-- ([a-z0-9-]+):begin[\s\S]*?<!-- \1:end -->/g, "").split("${Core.KOFI}").join("https://ko-fi.com/satouaaaaa").replace(/Core\.kofi\(("(?:[^"\\]|\\.)*"), ("(?:[^"\\]|\\.)*")\)/g, (m, a, b) => "`<p class=\"note kofi\">" + JSON.parse(a) + "、<a href=\"https://ko-fi.com/satouaaaaa\" target=\"_blank\" rel=\"noopener\">Ko-fi でコーヒー1杯の応援</a>をもらえると、" + JSON.parse(b) + "の励みになります（任意・遊ぶのはずっと無料）。</p>`");
 check("終えた回を消すのは同じ回のときだけ・0時を過ぎたホームの「今日」のボタンは描き直す（2026-11-04 CodeRabbit）", /c\.date === run\.date && c\.id === run\.id\) s2\.runs\[MODE\] = null/.test(html) && /\$\("go-d"\)\.onclick = \(\) => \(k !== todayKey\(\) \? home\(\)/.test(html));
 check("別のタブで今日の分を終えたあと、古い画面から今日・上級をもう一度始めない（2026-11-04 CodeRabbit）", /\(mode === "d" && s\.days\[k\]\) \|\| \(mode === "h" && s\.hdays\[k\]\)\) return;/.test(html));
 check("README の URL のすぐ後ろに全角の字を続けない（Link check が URL の一部と読む。2026-11-04）", !/https?:\/\/[\x21-\x7e]*[^\x00-\x7f]/.test(readFileSync(new URL("../README.md", import.meta.url), "utf8").replace(/\]\(https?:\/\/[^)\s]+\)/g, "").replace(/<https?:\/\/[^>\s]+>/g, "")));
@@ -57,8 +59,8 @@ const ext = [...html.matchAll(/(?:src|href)="(https?:[^"]+)"/g)].map((m) => m[1]
 check("外から読むのは文字（Google Fonts）だけ。スクリプト・広告・解析を入れない", ext.length === 0, ext.join(","));
 check("CSP で通信先を自分だけにしている", /connect-src 'self'/.test(html) && !/connect-src[^;"]*https/.test(html));
 check("Math.random は練習・とことんの家選び（shuffle）と回の見分けだけ（今日の3軒・上級は日付で決まる）", (html.match(/Math\.random/g) || []).length === 2 && !/Math\.random/.test(readFileSync(path.join(root, "rules.js"), "utf8")));
-check("好きなだけ遊べる：🎫・回数制限・「…すると開く」を入れない（2026-11-06 satou さん。寄付で成り立たせるため）", !/🎫|すると開く|で開きます|回まで遊べ|life\s*:\s*ELIFE|ELIFE/.test(html));
-{ const kofi = [...html.matchAll(/ko-fi\.com/g)].map((m) => m.index), fn = (i) => { const a = html.lastIndexOf("function ", i), c = html.lastIndexOf("const footer", i); return c > a ? "footer" : (html.slice(a + 9).match(/^\w+/) || [""])[0]; };
+check("好きなだけ遊べる：🎫・回数制限・「…すると開く」を入れない（2026-11-06 satou さん。寄付で成り立たせるため）", !/🎫|すると開く|で開きます|回まで遊べ|life\s*:\s*ELIFE|ELIFE/.test(gameOwn(html)));
+{ const kofi = [...gameOwn(html).matchAll(/ko-fi\.com/g)].map((m) => m.index), fn = (i) => { const a = gameOwn(html).lastIndexOf("function ", i), c = gameOwn(html).lastIndexOf("const footer", i); return c > a ? "footer" : (gameOwn(html).slice(a + 9).match(/^\w+/) || [""])[0]; };
   const where = kofi.map(fn);
   check("Ko-fi のリンクは結果の画面の1行（result）とページ下（footer）だけ。遊ぶ前・途中には出さない", where.length === 2 && where.includes("result") && where.includes("footer"), where.join(",")); }
 check("画面にお笑いの言葉を入れない（本物っぽく）", !/お笑い|ギャグ|ボケ|ツッコミ|なんでやねん|（うそ）/.test(html));
@@ -181,7 +183,7 @@ try {
   for (let j = 0; j < 2; j++) { await solveNow(page); await page.click("#next"); }
   const share = await page.textContent(".share");
   check("3軒で結果・シェアの文は番号と色だけ", /間取りパズル #\d+/.test(share) && /🟨🏠🏠/.test(share));
-  check("X・LINE は押したときに開くリンクだけ", /^https:\/\/twitter\.com\/intent\/tweet\?text=/.test(await page.getAttribute("#toX", "href")) && /^https:\/\/line\.me\/R\/share\?text=/.test(await page.getAttribute("#toLine", "href")));
+  check("X・LINE は押したときに開くリンクだけ", /^https:\/\/(?:x|twitter)\.com\/intent\/tweet\?text=/.test(await page.getAttribute("#toX", "href")) && /^https:\/\/line\.me\/R\/share\?text=/.test(await page.getAttribute("#toLine", "href")));
   check("結果に3軒の間取りが出る", (await page.locator(".minis .plan").count()) === 3);
   check("結果の画面は上（見出し）から開く（完成の画面の下までスクロールしたまま開かない）", (await page.evaluate(() => scrollY)) === 0 && await page.isVisible(".big"));
   check("ヒントを使った日は Ko-fi のひとことを出さない", (await page.locator(".kofi").count()) === 0);
